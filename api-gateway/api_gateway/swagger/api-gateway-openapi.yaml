@@ -1,0 +1,515 @@
+openapi: 3.0.3
+info:
+  title: API Gateway - Booking Platform
+  description: |
+    YARP-based API Gateway for routing GraphQL requests to downstream microservices.
+
+    The API Gateway serves as the single entry point for all client requests, routing
+    GraphQL operations to Identity Service, Train Service, Movie Service, and Admin BFF
+    based on URL path prefixes. It validates JWT tokens before forwarding requests.
+  version: 1.0.0
+  contact:
+    name: Booking Platform Team
+    email: support@bookingplatform.com
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: http://api-gateway:5000
+    description: Docker container server
+  - url: https://dev-api.bookingplatform.com
+    description: Development environment
+  - url: https://staging-api.bookingplatform.com
+    description: Staging environment
+  - url: https://api.bookingplatform.com
+    description: Production environment
+
+tags:
+  - name: Identity
+    description: Authentication and user management operations
+  - name: Trains
+    description: Train booking and search operations
+  - name: Movies
+    description: Movie booking and browsing operations
+  - name: Admin
+    description: Admin dashboard and management operations
+  - name: Health
+    description: Health check endpoints for monitoring
+
+paths:
+  /graphql/auth:
+    post:
+      tags:
+        - Identity
+      summary: GraphQL endpoint for Identity Service
+      description: |
+        Routes GraphQL queries and mutations for authentication operations (login, register, profile).
+        This is a public endpoint - no JWT token required.
+      operationId: identityGraphQL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              login:
+                summary: Login mutation
+                value:
+                  query: 'mutation Login($email: String!, $password: String!) { login(email: $email, password: $password) { token user { id email fullName } } }'
+                  variables:
+                    email: user@example.com
+                    password: SecurePass123
+              register:
+                summary: Register mutation
+                value:
+                  query: 'mutation Register($email: String!, $password: String!, $fullName: String!) { register(email: $email, password: $password, fullName: $fullName) { token user { id email fullName } } }'
+                  variables:
+                    email: newuser@example.com
+                    password: SecurePass123
+                    fullName: John Doe
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+              examples:
+                loginSuccess:
+                  summary: Login success
+                  value:
+                    data:
+                      login:
+                        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                        user:
+                          id: 1
+                          email: user@example.com
+                          fullName: John Doe
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /graphql/trains:
+    post:
+      tags:
+        - Trains
+      summary: GraphQL endpoint for Train Service
+      description: |
+        Routes GraphQL queries and mutations for train operations (search, booking, cancellation).
+        Requires valid JWT token with User or Admin role.
+      operationId: trainsGraphQL
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              searchTrains:
+                summary: Search trains query
+                value:
+                  query: 'query SearchTrains($source: String!, $destination: String!, $travelDate: DateTime!) { searchTrains(source: $source, destination: $destination, travelDate: $travelDate) { id trainNumber trainName departureTime arrivalTime availableSeats } }'
+                  variables:
+                    source: Mumbai
+                    destination: Delhi
+                    travelDate: '2026-06-15T00:00:00Z'
+              bookTrain:
+                summary: Book train mutation
+                value:
+                  query: 'mutation BookTrain($trainId: Int!, $seatClass: String!, $passengers: Int!) { bookTrain(trainId: $trainId, seatClass: $seatClass, passengers: $passengers) { bookingId confirmationNumber } }'
+                  variables:
+                    trainId: 1
+                    seatClass: AC3
+                    passengers: 2
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /graphql/movies:
+    post:
+      tags:
+        - Movies
+      summary: GraphQL endpoint for Movie Service
+      description: |
+        Routes GraphQL queries and mutations for movie operations (browse, booking, seat selection, cancellation).
+        Requires valid JWT token with User or Admin role for booking operations.
+      operationId: moviesGraphQL
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              getMovies:
+                summary: Get movies query
+                value:
+                  query: 'query GetMovies($genre: String, $language: String) { getMovies(genre: $genre, language: $language) { id title genre language format durationMinutes synopsis posterUrl } }'
+                  variables:
+                    genre: Action
+                    language: English
+              bookMovie:
+                summary: Book movie mutation
+                value:
+                  query: 'mutation BookMovie($showId: Int!, $seats: [String!]!) { bookMovie(showId: $showId, seats: $seats) { bookingId totalAmount seats } }'
+                  variables:
+                    showId: 123
+                    seats: ['A1', 'A2']
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /graphql/admin:
+    post:
+      tags:
+        - Admin
+      summary: GraphQL endpoint for Admin BFF
+      description: |
+        Routes GraphQL queries and mutations for admin operations (dashboard stats, user management, booking management).
+        Requires valid JWT token with Admin role.
+      operationId: adminGraphQL
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              getDashboardStats:
+                summary: Get dashboard stats query
+                value:
+                  query: 'query GetDashboardStats { getDashboardStats { totalBookings activeUsers cancellationCount } }'
+              getUsers:
+                summary: Get all users query
+                value:
+                  query: 'query GetUsers($page: Int, $limit: Int) { getUsers(page: $page, limit: $limit) { users { id email fullName role } totalCount } }'
+                  variables:
+                    page: 1
+                    limit: 20
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: General health check
+      description: Returns the health status of the API Gateway
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Gateway is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: Healthy
+                timestamp: '2026-05-06T10:30:00Z'
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Kubernetes/Docker readiness probe endpoint
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: Gateway is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: Ready
+                timestamp: '2026-05-06T10:30:00Z'
+
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Kubernetes/Docker liveness probe endpoint
+      operationId: livenessCheck
+      responses:
+        '200':
+          description: Gateway is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: Live
+                timestamp: '2026-05-06T10:30:00Z'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from Identity Service login/register operations.
+
+        Format: Authorization: Bearer <token>
+
+        Required claims:
+        - iss: Issuer (BookingPlatform)
+        - aud: Audience (BookingPlatformUsers)
+        - exp: Expiration timestamp
+        - role: User role (User or Admin)
+
+  schemas:
+    GraphQLRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: GraphQL query or mutation string
+          example: 'query { getMovies { id title } }'
+        variables:
+          type: object
+          description: GraphQL operation variables
+          additionalProperties: true
+          example:
+            genre: Action
+            language: English
+        operationName:
+          type: string
+          description: Optional operation name for named queries
+          example: GetMovies
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          description: GraphQL response data from downstream service
+          additionalProperties: true
+        errors:
+          type: array
+          description: GraphQL errors if operation failed
+          items:
+            $ref: '#/components/schemas/GraphQLError'
+
+    GraphQLError:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: Field 'invalidField' not found on type 'Query'
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              line:
+                type: integer
+              column:
+                type: integer
+        path:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - errorCode
+        - message
+        - timestamp
+        - traceId
+      properties:
+        errorCode:
+          type: string
+          description: Error code
+          enum:
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - NOT_FOUND
+            - INTERNAL_SERVER_ERROR
+            - BAD_GATEWAY
+            - SERVICE_UNAVAILABLE
+            - PAYLOAD_TOO_LARGE
+        message:
+          type: string
+          description: Human-readable error message
+          example: Token has expired
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp in ISO 8601 format
+          example: '2026-05-06T10:30:00Z'
+        traceId:
+          type: string
+          description: Distributed tracing ID for correlation
+          example: '00-abc123def456-xyz789-00'
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          description: Health status
+          enum:
+            - Healthy
+            - Ready
+            - Live
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of health check
+          example: '2026-05-06T10:30:00Z'
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - JWT token missing, invalid, or expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing Authorization header
+              value:
+                errorCode: UNAUTHORIZED
+                message: Authorization header missing
+                timestamp: '2026-05-06T10:30:00Z'
+                traceId: '00-abc123-def456-00'
+            expiredToken:
+              summary: Token has expired
+              value:
+                errorCode: UNAUTHORIZED
+                message: Token has expired
+                timestamp: '2026-05-06T10:30:00Z'
+                traceId: '00-abc123-def456-00'
+            invalidSignature:
+              summary: Invalid token signature
+              value:
+                errorCode: UNAUTHORIZED
+                message: Invalid token signature
+                timestamp: '2026-05-06T10:30:00Z'
+                traceId: '00-abc123-def456-00'
+
+    Forbidden:
+      description: Forbidden - Valid token but insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errorCode: FORBIDDEN
+            message: Insufficient permissions
+            timestamp: '2026-05-06T10:30:00Z'
+            traceId: '00-abc123-def456-00'
+
+    BadRequest:
+      description: Bad Request - Invalid GraphQL query or request format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/GraphQLResponse'
+
+    NotFound:
+      description: Not Found - Route does not match any configured path
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errorCode: NOT_FOUND
+            message: Route not configured
+            timestamp: '2026-05-06T10:30:00Z'
+            traceId: '00-abc123-def456-00'
+
+    InternalServerError:
+      description: Internal Server Error - Gateway internal error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errorCode: INTERNAL_SERVER_ERROR
+            message: Gateway internal error during routing
+            timestamp: '2026-05-06T10:30:00Z'
+            traceId: '00-abc123-def456-00'
+
+    BadGateway:
+      description: Bad Gateway - Downstream service unreachable or returned invalid response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errorCode: BAD_GATEWAY
+            message: Downstream service unreachable
+            timestamp: '2026-05-06T10:30:00Z'
+            traceId: '00-abc123-def456-00'
+
+    ServiceUnavailable:
+      description: Service Unavailable - Downstream service not running or timeout
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            errorCode: SERVICE_UNAVAILABLE
+            message: Downstream service not available
+            timestamp: '2026-05-06T10:30:00Z'
+            traceId: '00-abc123-def456-00'

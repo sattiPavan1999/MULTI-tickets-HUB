@@ -1,0 +1,59 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+
+# .NET
+*.dll
+*.exe
+*.pdb
+project.lock.json
+project.fragment.lock.json
+artifacts/
+**/Properties/launchSettings.json
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+.nuget/
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+appsettings.*.local.json
+secrets.json
+
+# Local agent / tooling state
+.claude/
+.playwright-mcp/
+
+# Node (if present anywhere)
+node_modules/
+npm-debug.log
+yarn-error.log

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TrainService.Tests/TrainService.Tests.csproj" />
+  <Project Path="TrainService/TrainService.csproj" />
+</Solution>

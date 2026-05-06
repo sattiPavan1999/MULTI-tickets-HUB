@@ -1,0 +1,3 @@
+CREATE DATABASE identity_db;
+CREATE DATABASE movies_db;
+CREATE DATABASE trains_db;

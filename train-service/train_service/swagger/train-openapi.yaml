@@ -1,0 +1,649 @@
+openapi: 3.0.3
+info:
+  title: Train Service API
+  version: 1.0.0
+  description: |
+    Train Service provides comprehensive train booking functionality including search,
+    seat availability checking, booking creation, and cancellation. Built with .NET 10
+    and GraphQL.
+  contact:
+    name: Backend Engineering Team
+    email: backend@tickethub.com
+
+servers:
+  - url: http://localhost:5002
+    description: Local Development
+  - url: http://train-service:5002
+    description: Docker Container
+  - url: http://localhost:5000/graphql/trains
+    description: API Gateway (Development)
+  - url: https://api-staging.tickethub.com/graphql/trains
+    description: Staging Environment
+  - url: https://api.tickethub.com/graphql/trains
+    description: Production Environment
+
+paths:
+  /graphql:
+    post:
+      summary: GraphQL Endpoint
+      description: |
+        Main GraphQL endpoint for train search, booking creation, and management.
+        Supports queries: searchTrains, getTrainById, getBooking
+        Supports mutations: createBooking, cancelBooking
+      operationId: graphqlEndpoint
+      tags:
+        - GraphQL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: GraphQL query or mutation string
+                variables:
+                  type: object
+                  description: Variables for the GraphQL operation
+                operationName:
+                  type: string
+                  description: Name of the operation (optional)
+            examples:
+              searchTrains:
+                summary: Search Trains Query
+                value:
+                  query: |
+                    query SearchTrains($input: SearchTrainInput!) {
+                      searchTrains(input: $input) {
+                        id
+                        trainNumber
+                        trainName
+                        sourceStation
+                        destinationStation
+                        departureTime
+                        arrivalTime
+                        availableSeats {
+                          sleeper
+                          ac3Tier
+                          ac2Tier
+                          ac1Tier
+                        }
+                        fare {
+                          sleeper
+                          ac3Tier
+                          ac2Tier
+                          ac1Tier
+                        }
+                      }
+                    }
+                  variables:
+                    input:
+                      sourceStation: "Mumbai Central"
+                      destinationStation: "New Delhi"
+                      travelDate: "2026-06-15"
+              createBooking:
+                summary: Create Booking Mutation
+                value:
+                  query: |
+                    mutation CreateBooking($input: CreateBookingInput!) {
+                      createBooking(input: $input) {
+                        id
+                        pnr
+                        userId
+                        trainId
+                        travelDate
+                        seatClass
+                        passengerDetails {
+                          name
+                          age
+                          gender
+                        }
+                        totalAmount
+                        status
+                        bookedAt
+                      }
+                    }
+                  variables:
+                    input:
+                      userId: 42
+                      trainId: 1
+                      travelDate: "2026-06-15"
+                      seatClass: "2AC"
+                      numberOfPassengers: 2
+                      passengerDetails:
+                        - name: "John Doe"
+                          age: 35
+                          gender: "Male"
+                        - name: "Jane Doe"
+                          age: 32
+                          gender: "Female"
+              cancelBooking:
+                summary: Cancel Booking Mutation
+                value:
+                  query: |
+                    mutation CancelBooking($bookingId: Int!, $userId: Int!) {
+                      cancelBooking(bookingId: $bookingId, userId: $userId) {
+                        id
+                        pnr
+                        status
+                      }
+                    }
+                  variables:
+                    bookingId: 1001
+                    userId: 42
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    description: GraphQL response data
+                  errors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GraphQLError'
+              examples:
+                searchTrainsSuccess:
+                  summary: Successful train search
+                  value:
+                    data:
+                      searchTrains:
+                        - id: 1
+                          trainNumber: "12951"
+                          trainName: "Mumbai Rajdhani"
+                          sourceStation: "Mumbai Central"
+                          destinationStation: "New Delhi"
+                          departureTime: "16:55:00"
+                          arrivalTime: "08:35:00"
+                          availableSeats:
+                            sleeper: 72
+                            ac3Tier: 64
+                            ac2Tier: 48
+                            ac1Tier: 24
+                          fare:
+                            sleeper: 1200.00
+                            ac3Tier: 2100.00
+                            ac2Tier: 3000.00
+                            ac1Tier: 4500.00
+                bookingSuccess:
+                  summary: Successful booking creation
+                  value:
+                    data:
+                      createBooking:
+                        id: 1001
+                        pnr: 8234567890
+                        userId: 42
+                        trainId: 1
+                        travelDate: "2026-06-15"
+                        seatClass: "2AC"
+                        passengerDetails:
+                          - name: "John Doe"
+                            age: 35
+                            gender: "Male"
+                          - name: "Jane Doe"
+                            age: 32
+                            gender: "Female"
+                        totalAmount: 6000.00
+                        status: "Confirmed"
+                        bookedAt: "2026-05-20T14:30:00Z"
+        '400':
+          description: Bad Request - Invalid input or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validationError:
+                  summary: Validation error
+                  value:
+                    errorCode: "INVALID_INPUT"
+                    message: "Source and destination stations must be different"
+                    timestamp: "2026-05-20T14:30:00Z"
+                    traceId: "00-abc123-def456-01"
+                insufficientSeats:
+                  summary: Insufficient seats
+                  value:
+                    errorCode: "INSUFFICIENT_SEATS"
+                    message: "Insufficient seats available. Only 5 seats available in 2AC"
+                    timestamp: "2026-05-20T14:30:00Z"
+                    traceId: "00-abc123-def456-01"
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "UNAUTHORIZED"
+                message: "You are not authorized to access this booking"
+                timestamp: "2026-05-20T14:30:00Z"
+                traceId: "00-abc123-def456-01"
+        '404':
+          description: Not Found - Resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "NOT_FOUND"
+                message: "Train with ID 999 not found"
+                timestamp: "2026-05-20T14:30:00Z"
+                traceId: "00-abc123-def456-01"
+        '409':
+          description: Conflict - Concurrent booking race condition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "INSUFFICIENT_SEATS"
+                message: "Insufficient seats available"
+                timestamp: "2026-05-20T14:30:00Z"
+                traceId: "00-abc123-def456-01"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "INTERNAL_ERROR"
+                message: "An unexpected error occurred. Please try again later."
+                timestamp: "2026-05-20T14:30:00Z"
+                traceId: "00-abc123-def456-01"
+
+  /health/ready:
+    get:
+      summary: Readiness Health Check
+      description: Checks if the service is ready to accept traffic (database connectivity)
+      operationId: healthReady
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "Ready"
+                timestamp: "2026-05-20T14:30:00Z"
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthErrorResponse'
+              example:
+                status: "Not Ready"
+                error: "Cannot connect to database"
+                timestamp: "2026-05-20T14:30:00Z"
+
+  /health/live:
+    get:
+      summary: Liveness Health Check
+      description: Checks if the service is alive and running
+      operationId: healthLive
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "Live"
+                timestamp: "2026-05-20T14:30:00Z"
+
+components:
+  schemas:
+    SearchTrainInput:
+      type: object
+      required:
+        - sourceStation
+        - destinationStation
+        - travelDate
+      properties:
+        sourceStation:
+          type: string
+          description: Departure station name
+          example: "Mumbai Central"
+        destinationStation:
+          type: string
+          description: Arrival station name
+          example: "New Delhi"
+        travelDate:
+          type: string
+          format: date
+          description: Date of journey (YYYY-MM-DD)
+          example: "2026-06-15"
+
+    CreateBookingInput:
+      type: object
+      required:
+        - userId
+        - trainId
+        - travelDate
+        - seatClass
+        - numberOfPassengers
+        - passengerDetails
+      properties:
+        userId:
+          type: integer
+          description: User making the booking (from JWT)
+          example: 42
+        trainId:
+          type: integer
+          description: Selected train ID
+          example: 1
+        travelDate:
+          type: string
+          format: date
+          description: Journey date
+          example: "2026-06-15"
+        seatClass:
+          type: string
+          enum: ["Sleeper", "3AC", "2AC", "1AC"]
+          description: Seat class
+          example: "2AC"
+        numberOfPassengers:
+          type: integer
+          minimum: 1
+          description: Number of travelers
+          example: 2
+        passengerDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/PassengerDetail'
+          minItems: 1
+
+    PassengerDetail:
+      type: object
+      required:
+        - name
+        - age
+        - gender
+      properties:
+        name:
+          type: string
+          description: Passenger full name
+          example: "John Doe"
+        age:
+          type: integer
+          minimum: 1
+          maximum: 150
+          description: Passenger age
+          example: 35
+        gender:
+          type: string
+          enum: ["Male", "Female", "Other"]
+          description: Passenger gender
+          example: "Male"
+
+    TrainResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique train identifier
+          example: 1
+        trainNumber:
+          type: string
+          description: Official train number
+          example: "12951"
+        trainName:
+          type: string
+          description: Name of the train
+          example: "Mumbai Rajdhani"
+        sourceStation:
+          type: string
+          description: Departure station
+          example: "Mumbai Central"
+        destinationStation:
+          type: string
+          description: Arrival station
+          example: "New Delhi"
+        departureTime:
+          type: string
+          format: time
+          description: Scheduled departure time
+          example: "16:55:00"
+        arrivalTime:
+          type: string
+          format: time
+          description: Scheduled arrival time
+          example: "08:35:00"
+        availableSeats:
+          $ref: '#/components/schemas/SeatAvailability'
+        fare:
+          $ref: '#/components/schemas/Fare'
+
+    SeatAvailability:
+      type: object
+      properties:
+        sleeper:
+          type: integer
+          minimum: 0
+          description: Available sleeper seats
+          example: 72
+        ac3Tier:
+          type: integer
+          minimum: 0
+          description: Available AC 3 Tier seats
+          example: 64
+        ac2Tier:
+          type: integer
+          minimum: 0
+          description: Available AC 2 Tier seats
+          example: 48
+        ac1Tier:
+          type: integer
+          minimum: 0
+          description: Available AC 1 Tier seats
+          example: 24
+
+    Fare:
+      type: object
+      properties:
+        sleeper:
+          type: number
+          format: decimal
+          minimum: 0
+          description: Sleeper class fare
+          example: 1200.00
+        ac3Tier:
+          type: number
+          format: decimal
+          minimum: 0
+          description: AC 3 Tier fare
+          example: 2100.00
+        ac2Tier:
+          type: number
+          format: decimal
+          minimum: 0
+          description: AC 2 Tier fare
+          example: 3000.00
+        ac1Tier:
+          type: number
+          format: decimal
+          minimum: 0
+          description: AC 1 Tier fare
+          example: 4500.00
+
+    BookingResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique booking identifier
+          example: 1001
+        pnr:
+          type: integer
+          format: int64
+          description: Unique Passenger Name Record number
+          example: 8234567890
+        userId:
+          type: integer
+          description: User who made the booking
+          example: 42
+        trainId:
+          type: integer
+          description: Booked train ID
+          example: 1
+        travelDate:
+          type: string
+          format: date
+          description: Journey date
+          example: "2026-06-15"
+        seatClass:
+          type: string
+          description: Booked seat class
+          example: "2AC"
+        passengerDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/PassengerDetail'
+        totalAmount:
+          type: number
+          format: decimal
+          description: Total fare amount
+          example: 6000.00
+        status:
+          type: string
+          enum: ["Confirmed", "Cancelled"]
+          description: Booking status
+          example: "Confirmed"
+        bookedAt:
+          type: string
+          format: date-time
+          description: Booking timestamp
+          example: "2026-05-20T14:30:00Z"
+
+    CancelBookingResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Booking identifier
+          example: 1001
+        pnr:
+          type: integer
+          format: int64
+          description: PNR number
+          example: 8234567890
+        status:
+          type: string
+          description: Updated status
+          example: "Cancelled"
+
+    ErrorResponse:
+      type: object
+      required:
+        - errorCode
+        - message
+        - timestamp
+        - traceId
+      properties:
+        errorCode:
+          type: string
+          description: Error code for categorization
+          enum:
+            - INVALID_INPUT
+            - NOT_FOUND
+            - UNAUTHORIZED
+            - INSUFFICIENT_SEATS
+            - INVALID_OPERATION
+            - INTERNAL_ERROR
+          example: "INVALID_INPUT"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Source and destination stations must be different"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+          example: "2026-05-20T14:30:00Z"
+        traceId:
+          type: string
+          description: Correlation ID for tracking
+          example: "00-abc123-def456-01"
+
+    GraphQLError:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              line:
+                type: integer
+              column:
+                type: integer
+        path:
+          type: array
+          items:
+            type: string
+        extensions:
+          type: object
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["Ready", "Live"]
+          description: Health status
+          example: "Ready"
+        timestamp:
+          type: string
+          format: date-time
+          description: Check timestamp
+          example: "2026-05-20T14:30:00Z"
+
+    HealthErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Health status
+          example: "Not Ready"
+        error:
+          type: string
+          description: Error message
+          example: "Cannot connect to database"
+        timestamp:
+          type: string
+          format: date-time
+          description: Check timestamp
+          example: "2026-05-20T14:30:00Z"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from Identity Service
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: GraphQL
+    description: GraphQL API operations
+  - name: Health
+    description: Health check endpoints

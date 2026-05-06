@@ -1,0 +1,664 @@
+openapi: 3.0.3
+info:
+  title: Movie Service API
+  description: |
+    Movie Service enables general public users to browse movies, select cinema locations and showtimes,
+    view interactive seat maps, book movie tickets with seat selection, and cancel bookings.
+  version: 1.0.0
+  contact:
+    name: Movie Service Team
+    email: support@movieservice.com
+
+servers:
+  - url: http://localhost:5003
+    description: Local development server
+  - url: http://movie-service:5003
+    description: Docker container
+  - url: http://localhost:5003/graphql
+    description: GraphQL endpoint (local)
+  - url: http://movie-service:5003/graphql
+    description: GraphQL endpoint (Docker)
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2026-05-10T14:30:00Z'
+
+  /health/ready:
+    get:
+      summary: Readiness check endpoint
+      description: Returns whether the service is ready to accept traffic
+      operationId: getReadiness
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2026-05-10T14:30:00Z'
+
+  /health/live:
+    get:
+      summary: Liveness check endpoint
+      description: Returns whether the service is alive
+      operationId: getLiveness
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: alive
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2026-05-10T14:30:00Z'
+
+  /graphql:
+    post:
+      summary: GraphQL endpoint
+      description: |
+        Main GraphQL endpoint for all movie service operations.
+
+        **Available Queries:**
+        - `getMovies(genre: String, language: String, format: String): [Movie!]!`
+        - `getShowsByMovie(movieId: Int!, date: DateTime): [Show!]!`
+        - `getSeatMap(showId: Int!): [Seat!]!`
+        - `getBooking(bookingId: Int!, userId: Int!): Booking!`
+
+        **Available Mutations:**
+        - `bookSeats(input: BookSeatsInput!): Booking!`
+        - `cancelBooking(bookingId: Int!, userId: Int!): Booking!`
+      operationId: graphqlEndpoint
+      tags:
+        - GraphQL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              getMovies:
+                summary: Browse movies
+                value:
+                  query: |
+                    query GetMovies($genre: String, $language: String, $format: String) {
+                      getMovies(genre: $genre, language: $language, format: $format) {
+                        id
+                        title
+                        genre
+                        language
+                        format
+                        durationMinutes
+                        synopsis
+                        posterUrl
+                      }
+                    }
+                  variables:
+                    genre: "Action"
+                    language: "English"
+                    format: "IMAX"
+
+              getShowsByMovie:
+                summary: Get shows for a movie
+                value:
+                  query: |
+                    query GetShowsByMovie($movieId: Int!, $date: DateTime) {
+                      getShowsByMovie(movieId: $movieId, date: $date) {
+                        id
+                        movieId
+                        screenId
+                        showTime
+                        availableSeats
+                        screen {
+                          id
+                          name
+                          totalSeats
+                          cinema {
+                            id
+                            name
+                            city
+                            address
+                          }
+                        }
+                      }
+                    }
+                  variables:
+                    movieId: 1
+
+              getSeatMap:
+                summary: Get seat map for a show
+                value:
+                  query: |
+                    query GetSeatMap($showId: Int!) {
+                      getSeatMap(showId: $showId) {
+                        id
+                        screenId
+                        rowLabel
+                        seatNumber
+                        category
+                        price
+                        isAvailable
+                      }
+                    }
+                  variables:
+                    showId: 101
+
+              bookSeats:
+                summary: Book seats for a show
+                value:
+                  query: |
+                    mutation BookSeats($input: BookSeatsInput!) {
+                      bookSeats(input: $input) {
+                        id
+                        userId
+                        showId
+                        selectedSeatIds
+                        totalAmount
+                        status
+                        bookedAt
+                      }
+                    }
+                  variables:
+                    input:
+                      userId: 123
+                      showId: 101
+                      selectedSeatIds: [1001, 1005, 1006]
+
+              cancelBooking:
+                summary: Cancel a booking
+                value:
+                  query: |
+                    mutation CancelBooking($bookingId: Int!, $userId: Int!) {
+                      cancelBooking(bookingId: $bookingId, userId: $userId) {
+                        id
+                        status
+                        cancelledAt
+                      }
+                    }
+                  variables:
+                    bookingId: 5001
+                    userId: 123
+
+              getBooking:
+                summary: Get booking details
+                value:
+                  query: |
+                    query GetBooking($bookingId: Int!, $userId: Int!) {
+                      getBooking(bookingId: $bookingId, userId: $userId) {
+                        id
+                        userId
+                        showId
+                        selectedSeatIds
+                        totalAmount
+                        status
+                        bookedAt
+                        show {
+                          id
+                          showTime
+                          screen {
+                            name
+                            cinema {
+                              name
+                              city
+                            }
+                          }
+                        }
+                        seats {
+                          rowLabel
+                          seatNumber
+                          category
+                          price
+                        }
+                      }
+                    }
+                  variables:
+                    bookingId: 5001
+                    userId: 123
+
+      responses:
+        '200':
+          description: GraphQL query executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+              examples:
+                moviesResponse:
+                  summary: Movies list response
+                  value:
+                    data:
+                      getMovies:
+                        - id: 1
+                          title: "Inception"
+                          genre: "Science Fiction"
+                          language: "English"
+                          format: "IMAX"
+                          durationMinutes: 148
+                          synopsis: "A thief who steals corporate secrets..."
+                          posterUrl: "https://example.com/posters/inception.jpg"
+
+                bookingResponse:
+                  summary: Booking confirmation response
+                  value:
+                    data:
+                      bookSeats:
+                        id: 5001
+                        userId: 123
+                        showId: 101
+                        selectedSeatIds: [1001, 1005, 1006]
+                        totalAmount: 600.00
+                        status: "Confirmed"
+                        bookedAt: "2026-05-10T14:30:00Z"
+
+        '400':
+          description: Bad request - Invalid input or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFormat:
+                  summary: Invalid format value
+                  value:
+                    errorCode: "INVALID_REQUEST"
+                    message: "Invalid format. Must be one of: 2D, 3D, IMAX"
+                    timestamp: "2026-05-10T14:30:00Z"
+                    traceId: "0HMVFE0A2S000:00000001"
+
+                maxSeatsExceeded:
+                  summary: Maximum seats exceeded
+                  value:
+                    errorCode: "INVALID_REQUEST"
+                    message: "Maximum 10 seats allowed per booking"
+                    timestamp: "2026-05-10T14:30:00Z"
+                    traceId: "0HMVFE0A2S000:00000002"
+
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "FORBIDDEN"
+                message: "You do not have permission to access this booking"
+                timestamp: "2026-05-10T14:30:00Z"
+                traceId: "0HMVFE0A2S000:00000003"
+
+        '404':
+          description: Not found - Resource does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "RESOURCE_NOT_FOUND"
+                message: "Movie with ID 999 not found"
+                timestamp: "2026-05-10T14:30:00Z"
+                traceId: "0HMVFE0A2S000:00000004"
+
+        '409':
+          description: Conflict - Concurrent booking or seat already booked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "CONFLICT"
+                message: "The following seats are no longer available: 1001, 1005"
+                timestamp: "2026-05-10T14:30:00Z"
+                traceId: "0HMVFE0A2S000:00000005"
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "INTERNAL_ERROR"
+                message: "An error occurred while processing your request"
+                timestamp: "2026-05-10T14:30:00Z"
+                traceId: "0HMVFE0A2S000:00000006"
+
+components:
+  schemas:
+    GraphQLRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: The GraphQL query or mutation
+        variables:
+          type: object
+          description: Variables for the GraphQL operation
+        operationName:
+          type: string
+          description: The name of the operation to execute
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          description: The result of the GraphQL operation
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphQLError'
+
+    GraphQLError:
+      type: object
+      properties:
+        message:
+          type: string
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              line:
+                type: integer
+              column:
+                type: integer
+        path:
+          type: array
+          items:
+            type: string
+
+    Movie:
+      type: object
+      required:
+        - id
+        - title
+        - genre
+        - language
+        - format
+        - durationMinutes
+        - synopsis
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "Inception"
+        genre:
+          type: string
+          example: "Science Fiction"
+        language:
+          type: string
+          example: "English"
+        format:
+          type: string
+          enum: [2D, 3D, IMAX]
+          example: "IMAX"
+        durationMinutes:
+          type: integer
+          example: 148
+        synopsis:
+          type: string
+          example: "A thief who steals corporate secrets through dream-sharing technology"
+        posterUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/posters/inception.jpg"
+
+    Show:
+      type: object
+      required:
+        - id
+        - movieId
+        - screenId
+        - showTime
+        - availableSeats
+      properties:
+        id:
+          type: integer
+          example: 101
+        movieId:
+          type: integer
+          example: 1
+        screenId:
+          type: integer
+          example: 5
+        showTime:
+          type: string
+          format: date-time
+          example: "2026-05-15T18:30:00Z"
+        availableSeats:
+          type: integer
+          example: 45
+        screen:
+          $ref: '#/components/schemas/Screen'
+
+    Screen:
+      type: object
+      required:
+        - id
+        - name
+        - totalSeats
+      properties:
+        id:
+          type: integer
+          example: 5
+        name:
+          type: string
+          example: "Screen 2"
+        totalSeats:
+          type: integer
+          example: 100
+        cinema:
+          $ref: '#/components/schemas/Cinema'
+
+    Cinema:
+      type: object
+      required:
+        - id
+        - name
+        - city
+        - address
+      properties:
+        id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: "Cineplex Downtown"
+        city:
+          type: string
+          example: "Mumbai"
+        address:
+          type: string
+          example: "123 Main Street"
+
+    Seat:
+      type: object
+      required:
+        - id
+        - screenId
+        - rowLabel
+        - seatNumber
+        - category
+        - price
+        - isAvailable
+      properties:
+        id:
+          type: integer
+          example: 1001
+        screenId:
+          type: integer
+          example: 5
+        rowLabel:
+          type: string
+          example: "A"
+        seatNumber:
+          type: integer
+          example: 1
+        category:
+          type: string
+          enum: [Regular, Premium, Recliner]
+          example: "Regular"
+        price:
+          type: number
+          format: decimal
+          example: 200.00
+        isAvailable:
+          type: boolean
+          example: true
+
+    Booking:
+      type: object
+      required:
+        - id
+        - userId
+        - showId
+        - selectedSeatIds
+        - totalAmount
+        - status
+        - bookedAt
+      properties:
+        id:
+          type: integer
+          example: 5001
+        userId:
+          type: integer
+          example: 123
+        showId:
+          type: integer
+          example: 101
+        selectedSeatIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 10
+          example: [1001, 1005, 1006]
+        totalAmount:
+          type: number
+          format: decimal
+          example: 600.00
+        status:
+          type: string
+          enum: [Confirmed, Cancelled]
+          example: "Confirmed"
+        bookedAt:
+          type: string
+          format: date-time
+          example: "2026-05-10T14:30:00Z"
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        show:
+          $ref: '#/components/schemas/Show'
+        seats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Seat'
+
+    BookSeatsInput:
+      type: object
+      required:
+        - userId
+        - showId
+        - selectedSeatIds
+      properties:
+        userId:
+          type: integer
+          description: User identifier from JWT token
+          example: 123
+        showId:
+          type: integer
+          description: Show identifier
+          example: 101
+        selectedSeatIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 10
+          description: Array of seat IDs to book (1-10 seats)
+          example: [1001, 1005, 1006]
+
+    ErrorResponse:
+      type: object
+      required:
+        - errorCode
+        - message
+        - timestamp
+        - traceId
+      properties:
+        errorCode:
+          type: string
+          enum:
+            - RESOURCE_NOT_FOUND
+            - INVALID_REQUEST
+            - CONFLICT
+            - FORBIDDEN
+            - INTERNAL_ERROR
+          example: "INVALID_REQUEST"
+        message:
+          type: string
+          example: "Maximum 10 seats allowed per booking"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-10T14:30:00Z"
+        traceId:
+          type: string
+          description: Correlation ID for tracing requests
+          example: "0HMVFE0A2S000:00000001"
+
+tags:
+  - name: Health
+    description: Health check endpoints for monitoring
+  - name: GraphQL
+    description: GraphQL API for all movie service operations

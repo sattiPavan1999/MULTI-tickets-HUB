@@ -1,0 +1,6 @@
+@TrainService_HostAddress = http://localhost:5052
+
+GET {{TrainService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

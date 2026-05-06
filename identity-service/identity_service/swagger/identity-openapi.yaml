@@ -1,0 +1,533 @@
+openapi: 3.0.3
+info:
+  title: Identity Service API
+  description: |
+    Authentication and authorization service for the TicketHub platform.
+    Provides user registration, login, profile management, and JWT token generation.
+  version: 1.0.0
+  contact:
+    name: TicketHub API Support
+    email: support@tickethub.com
+
+servers:
+  - url: http://localhost:5001
+    description: Local development server
+  - url: http://identity-service:5001
+    description: Docker container server
+  - url: http://localhost:5001/graphql
+    description: Local GraphQL endpoint
+  - url: http://identity-service:5001/graphql
+    description: Docker GraphQL endpoint
+
+tags:
+  - name: Authentication
+    description: User authentication operations
+  - name: Profile
+    description: User profile management
+  - name: Health
+    description: Health check endpoints
+
+paths:
+  /graphql:
+    post:
+      tags:
+        - Authentication
+        - Profile
+      summary: GraphQL endpoint
+      description: |
+        Main GraphQL endpoint for all Identity Service operations.
+
+        **Mutations:**
+        - register: Register new user
+        - login: Authenticate user and return JWT token
+        - updateProfile: Update user profile (requires authentication)
+
+        **Queries:**
+        - getMe: Get current authenticated user profile (requires authentication)
+        - getUser: Get user by ID (admin/internal use)
+      operationId: graphqlPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/RegisterMutation'
+                - $ref: '#/components/schemas/LoginMutation'
+                - $ref: '#/components/schemas/UpdateProfileMutation'
+                - $ref: '#/components/schemas/GetMeQuery'
+                - $ref: '#/components/schemas/GetUserQuery'
+            examples:
+              register:
+                summary: Register new user
+                value:
+                  query: |
+                    mutation Register($input: RegisterInput!) {
+                      register(input: $input) {
+                        id
+                        email
+                        fullName
+                        phoneNumber
+                        role
+                        createdAt
+                      }
+                    }
+                  variables:
+                    input:
+                      email: user@example.com
+                      password: SecurePass123!
+                      fullName: John Doe
+                      phoneNumber: "+1234567890"
+              login:
+                summary: Login user
+                value:
+                  query: |
+                    mutation Login($input: LoginInput!) {
+                      login(input: $input) {
+                        token
+                        user {
+                          id
+                          email
+                          fullName
+                          phoneNumber
+                          role
+                        }
+                      }
+                    }
+                  variables:
+                    input:
+                      email: user@example.com
+                      password: SecurePass123!
+              getMe:
+                summary: Get current user profile
+                value:
+                  query: |
+                    query {
+                      getMe {
+                        id
+                        email
+                        fullName
+                        phoneNumber
+                        role
+                        createdAt
+                      }
+                    }
+              updateProfile:
+                summary: Update user profile
+                value:
+                  query: |
+                    mutation UpdateProfile($input: UpdateProfileInput!) {
+                      updateProfile(input: $input) {
+                        id
+                        email
+                        fullName
+                        phoneNumber
+                        role
+                      }
+                    }
+                  variables:
+                    input:
+                      fullName: John Michael Doe
+                      phoneNumber: "+1234567899"
+      parameters:
+        - name: Authorization
+          in: header
+          description: Bearer JWT token (required for authenticated operations)
+          required: false
+          schema:
+            type: string
+            example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/RegisterResponse'
+                  - $ref: '#/components/schemas/LoginResponse'
+                  - $ref: '#/components/schemas/UserResponse'
+              examples:
+                registerSuccess:
+                  summary: Registration success
+                  value:
+                    data:
+                      register:
+                        id: 1
+                        email: user@example.com
+                        fullName: John Doe
+                        phoneNumber: "+1234567890"
+                        role: User
+                        createdAt: "2026-05-15T10:30:00Z"
+                loginSuccess:
+                  summary: Login success
+                  value:
+                    data:
+                      login:
+                        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                        user:
+                          id: 1
+                          email: user@example.com
+                          fullName: John Doe
+                          phoneNumber: "+1234567890"
+                          role: User
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: VALIDATION_ERROR
+                message: Email is required
+                timestamp: "2026-05-15T10:30:00Z"
+                traceId: 80000000-0000-0000-0000-000000000000
+        '401':
+          description: Unauthorized - invalid credentials or token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: UNAUTHORIZED
+                message: Invalid credentials
+                timestamp: "2026-05-15T10:30:00Z"
+                traceId: 80000000-0000-0000-0000-000000000000
+        '404':
+          description: Not found - user does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: NOT_FOUND
+                message: User not found
+                timestamp: "2026-05-15T10:30:00Z"
+                traceId: 80000000-0000-0000-0000-000000000000
+        '409':
+          description: Conflict - email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: EMAIL_EXISTS
+                message: Email already registered
+                timestamp: "2026-05-15T10:30:00Z"
+                traceId: 80000000-0000-0000-0000-000000000000
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: INTERNAL_ERROR
+                message: An error occurred processing your request
+                timestamp: "2026-05-15T10:30:00Z"
+                traceId: 80000000-0000-0000-0000-000000000000
+
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Checks if the service is running
+      operationId: healthLive
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: alive
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-05-15T10:30:00Z"
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Checks if the service is ready to accept requests (includes database connectivity check)
+      operationId: healthReady
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-05-15T10:30:00Z"
+                  database:
+                    type: string
+                    example: connected
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not ready
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    example: disconnected
+
+  /v1/identity/health:
+    get:
+      tags:
+        - Health
+      summary: v1 health endpoint
+      description: Version 1 health check endpoint
+      operationId: v1Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: identity-service
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-05-15T10:30:00Z"
+
+components:
+  schemas:
+    RegisterInput:
+      type: object
+      required:
+        - email
+        - password
+        - fullName
+        - phoneNumber
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address (must be unique)
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: User's password (minimum 8 characters)
+          example: SecurePass123!
+        fullName:
+          type: string
+          description: User's full name
+          example: John Doe
+        phoneNumber:
+          type: string
+          pattern: '^\+?[1-9]\d{1,14}$'
+          description: User's contact phone number
+          example: "+1234567890"
+
+    LoginInput:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's registered email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          description: User's password
+          example: SecurePass123!
+
+    UpdateProfileInput:
+      type: object
+      properties:
+        fullName:
+          type: string
+          description: Updated full name (optional)
+          example: John Michael Doe
+        phoneNumber:
+          type: string
+          pattern: '^\+?[1-9]\d{1,14}$'
+          description: Updated phone number (optional)
+          example: "+1234567899"
+
+    UserType:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: User's unique identifier
+          example: 1
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: user@example.com
+        fullName:
+          type: string
+          description: User's full name
+          example: John Doe
+        phoneNumber:
+          type: string
+          description: User's phone number
+          example: "+1234567890"
+        role:
+          type: string
+          enum: [User, Admin]
+          description: User's role
+          example: User
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: "2026-05-15T10:30:00Z"
+
+    LoginResponseData:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/UserType'
+
+    ErrorResponse:
+      type: object
+      required:
+        - errorCode
+        - message
+        - timestamp
+      properties:
+        errorCode:
+          type: string
+          description: Error code
+          example: UNAUTHORIZED
+        message:
+          type: string
+          description: Error message
+          example: Invalid credentials
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+          example: "2026-05-15T10:30:00Z"
+        traceId:
+          type: string
+          description: Trace ID for correlation
+          example: 80000000-0000-0000-0000-000000000000
+
+    RegisterMutation:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "mutation Register($input: RegisterInput!) { register(input: $input) { id email fullName phoneNumber role createdAt } }"
+        variables:
+          type: object
+          properties:
+            input:
+              $ref: '#/components/schemas/RegisterInput'
+
+    LoginMutation:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "mutation Login($input: LoginInput!) { login(input: $input) { token user { id email fullName phoneNumber role } } }"
+        variables:
+          type: object
+          properties:
+            input:
+              $ref: '#/components/schemas/LoginInput'
+
+    UpdateProfileMutation:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "mutation UpdateProfile($input: UpdateProfileInput!) { updateProfile(input: $input) { id email fullName phoneNumber role } }"
+        variables:
+          type: object
+          properties:
+            input:
+              $ref: '#/components/schemas/UpdateProfileInput'
+
+    GetMeQuery:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "query { getMe { id email fullName phoneNumber role createdAt } }"
+
+    GetUserQuery:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "query { getUser(id: 1) { id email fullName phoneNumber role createdAt } }"
+
+    RegisterResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            register:
+              $ref: '#/components/schemas/UserType'
+
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            login:
+              $ref: '#/components/schemas/LoginResponseData'
+
+    UserResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            getMe:
+              $ref: '#/components/schemas/UserType'
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login mutation
+
+security:
+  - BearerAuth: []

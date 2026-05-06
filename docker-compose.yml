@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: tickethub-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - tickethub-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  identity-service:
+    build:
+      context: ./identity-service/identity_service
+      dockerfile: Dockerfile
+    container_name: identity-service
+    ports:
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5001
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=identity_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
+      - JwtSettings__Issuer=IdentityService
+      - JwtSettings__Audience=TicketHub
+      - JwtSettings__ExpiryMinutes=60
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tickethub-network
+    restart: unless-stopped
+
+  movie-service:
+    build:
+      context: ./movie-service/movie_service
+      dockerfile: Dockerfile
+    container_name: movie-service
+    ports:
+      - "5003:5003"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5003
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=movies_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tickethub-network
+    restart: unless-stopped
+
+  train-service:
+    build:
+      context: ./train-service/train_service
+      dockerfile: Dockerfile
+    container_name: train-service
+    ports:
+      - "5002:5002"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5002
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=trains_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tickethub-network
+    restart: unless-stopped
+
+  admin-bff:
+    build:
+      context: ./admin-bff/admin_bff
+      dockerfile: Dockerfile
+    container_name: admin-bff
+    ports:
+      - "5004:5004"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5004
+      - ServiceEndpoints__IdentityServiceUrl=http://identity-service:5001
+      - ServiceEndpoints__TrainServiceUrl=http://train-service:5002
+      - ServiceEndpoints__MovieServiceUrl=http://movie-service:5003
+      - JwtSettings__Issuer=tickethub-issuer
+      - JwtSettings__Audience=tickethub-audience
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
+    depends_on:
+      - identity-service
+      - movie-service
+      - train-service
+    networks:
+      - tickethub-network
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway/api_gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - JwtSettings__Issuer=BookingPlatform
+      - JwtSettings__Audience=BookingPlatformUsers
+      - JwtSettings__SecretKey=${JWT_GATEWAY_SECRET_KEY}
+      - JwtSettings__TokenExpiryMinutes=60
+    depends_on:
+      - identity-service
+      - movie-service
+      - train-service
+      - admin-bff
+    networks:
+      - tickethub-network
+    restart: unless-stopped
+
+networks:
+  tickethub-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

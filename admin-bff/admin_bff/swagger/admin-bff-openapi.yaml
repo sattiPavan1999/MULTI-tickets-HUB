@@ -1,0 +1,424 @@
+openapi: 3.0.3
+info:
+  title: Admin BFF API
+  version: 1.0.0
+  description: |
+    Backend for Frontend (BFF) service for admin dashboard operations.
+
+    This service provides a unified GraphQL interface for admin operations including:
+    - User management
+    - Booking management across Train and Movie services
+    - Inventory management (trains, movies)
+    - Dashboard statistics and analytics
+
+    **GraphQL Endpoint:** `/graphql` (POST)
+
+    **Authentication:** JWT Bearer token required with Admin role
+
+    **Downstream Services:**
+    - Identity Service (user management)
+    - Train Service (train bookings and inventory)
+    - Movie Service (movie bookings and inventory)
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: http://localhost:5000
+    description: Docker containerized environment
+  - url: https://dev-admin-bff.tickethub.com
+    description: Development environment
+  - url: https://staging-admin-bff.tickethub.com
+    description: Staging environment
+  - url: https://admin-bff.tickethub.com
+    description: Production environment
+
+tags:
+  - name: Health
+    description: Health check and monitoring endpoints
+  - name: GraphQL
+    description: GraphQL endpoint for admin operations
+
+paths:
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Checks if the service is alive and running
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: "UP"
+                timestamp: "2026-05-06T12:00:00Z"
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Checks if the service is ready to accept traffic
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: "READY"
+                timestamp: "2026-05-06T12:00:00Z"
+
+  /v1/admin-bff/health:
+    get:
+      tags:
+        - Health
+      summary: Service health check
+      description: Returns the health status of the admin BFF service
+      operationId: getServiceHealth
+      responses:
+        '200':
+          description: Service health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceHealth'
+              example:
+                service: "admin-bff"
+                status: "healthy"
+                timestamp: "2026-05-06T12:00:00Z"
+
+  /graphql:
+    post:
+      tags:
+        - GraphQL
+      summary: GraphQL endpoint
+      description: |
+        Main GraphQL endpoint for all admin operations.
+
+        **Queries:**
+        - `getMe`: Get current admin user details
+        - `getUsers`: Get all registered users
+        - `getAllBookings(filter: BookingFilterInput)`: Get all bookings with optional filters
+        - `getDashboardStats`: Get dashboard statistics
+
+        **Mutations:**
+        - `deactivateUser(userId: Int!)`: Deactivate a user account
+        - `cancelBooking(bookingId: Int!, bookingType: String!)`: Cancel a booking
+        - `addTrain(input: AddTrainInput!)`: Add a new train
+        - `addMovie(input: AddMovieInput!)`: Add a new movie
+      operationId: graphqlEndpoint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+            examples:
+              getMe:
+                summary: Get current user
+                value:
+                  query: "query { getMe { id email fullName role } }"
+              getUsers:
+                summary: Get all users
+                value:
+                  query: "query { getUsers { id email fullName phoneNumber role createdAt } }"
+              getAllBookings:
+                summary: Get all bookings with filter
+                value:
+                  query: |
+                    query($filter: BookingFilterInput) {
+                      getAllBookings(filter: $filter) {
+                        id userId bookingType pnr showId totalAmount status bookedAt
+                      }
+                    }
+                  variables:
+                    filter:
+                      status: "Confirmed"
+                      serviceType: "Train"
+              getDashboardStats:
+                summary: Get dashboard statistics
+                value:
+                  query: "query { getDashboardStats { totalBookings activeUsers cancellationCount } }"
+              deactivateUser:
+                summary: Deactivate a user
+                value:
+                  query: "mutation { deactivateUser(userId: 5) { success message } }"
+              cancelBooking:
+                summary: Cancel a booking
+                value:
+                  query: 'mutation { cancelBooking(bookingId: 101, bookingType: "Train") { success message } }'
+              addTrain:
+                summary: Add a new train
+                value:
+                  query: |
+                    mutation($input: AddTrainInput!) {
+                      addTrain(input: $input) { id trainNumber trainName }
+                    }
+                  variables:
+                    input:
+                      trainNumber: "12345"
+                      trainName: "Express"
+                      sourceStation: "CityA"
+                      destinationStation: "CityB"
+                      departureTime: "10:00"
+                      arrivalTime: "18:00"
+                      totalSeats:
+                        Sleeper: 200
+                        AC3: 100
+                        AC2: 50
+                        AC1: 20
+      responses:
+        '200':
+          description: Successful GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+              examples:
+                successResponse:
+                  summary: Successful query response
+                  value:
+                    data:
+                      getMe:
+                        id: 1
+                        email: "admin@tickethub.com"
+                        fullName: "Admin User"
+                        role: "Admin"
+                errorResponse:
+                  summary: Error response
+                  value:
+                    errors:
+                      - message: "Admin access required"
+                        extensions:
+                          code: "FORBIDDEN"
+                          statusCode: 403
+                          traceId: "0HN7QMVQJ8Q4K:00000001"
+                          timestamp: "2026-05-06T12:00:00Z"
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "UNAUTHORIZED"
+                message: "Invalid or expired JWT token"
+                timestamp: "2026-05-06T12:00:00Z"
+                traceId: "0HN7QMVQJ8Q4K:00000001"
+        '403':
+          description: Forbidden - Non-admin user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "FORBIDDEN"
+                message: "Admin access required"
+                timestamp: "2026-05-06T12:00:00Z"
+                traceId: "0HN7QMVQJ8Q4K:00000001"
+        '500':
+          description: Internal Server Error - Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errorCode: "SERVICE_UNAVAILABLE"
+                message: "Identity Service unavailable"
+                timestamp: "2026-05-06T12:00:00Z"
+                traceId: "0HN7QMVQJ8Q4K:00000001"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with Admin role required
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "UP"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-06T12:00:00Z"
+
+    ServiceHealth:
+      type: object
+      properties:
+        service:
+          type: string
+          example: "admin-bff"
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-06T12:00:00Z"
+
+    GraphQLRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: GraphQL query or mutation string
+        variables:
+          type: object
+          description: Variables for the GraphQL operation
+        operationName:
+          type: string
+          description: Name of the operation to execute
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          description: Query result data
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphQLError'
+
+    GraphQLError:
+      type: object
+      properties:
+        message:
+          type: string
+        extensions:
+          type: object
+          properties:
+            code:
+              type: string
+            statusCode:
+              type: integer
+            traceId:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - errorCode
+        - message
+        - timestamp
+        - traceId
+      properties:
+        errorCode:
+          type: string
+          description: Error code identifier
+          example: "UNAUTHORIZED"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid or expired JWT token"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+          example: "2026-05-06T12:00:00Z"
+        traceId:
+          type: string
+          description: Request trace ID for debugging
+          example: "0HN7QMVQJ8Q4K:00000001"
+
+    UserDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: "admin@tickethub.com"
+        fullName:
+          type: string
+          example: "Admin User"
+        phoneNumber:
+          type: string
+          example: "+1234567890"
+        role:
+          type: string
+          enum: [User, Admin]
+          example: "Admin"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-05-01T10:00:00Z"
+
+    BookingDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        userId:
+          type: integer
+          example: 5
+        bookingType:
+          type: string
+          enum: [Train, Movie]
+          example: "Train"
+        pnr:
+          type: integer
+          nullable: true
+          example: 123456789
+        showId:
+          type: integer
+          nullable: true
+          example: 45
+        totalAmount:
+          type: number
+          format: decimal
+          example: 1500.00
+        status:
+          type: string
+          enum: [Confirmed, Cancelled]
+          example: "Confirmed"
+        bookedAt:
+          type: string
+          format: date-time
+          example: "2026-05-10T14:30:00Z"
+
+    DashboardStatsDto:
+      type: object
+      properties:
+        totalBookings:
+          type: integer
+          example: 1523
+        activeUsers:
+          type: integer
+          example: 487
+        cancellationCount:
+          type: integer
+          example: 89
+
+    OperationResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "User deactivated successfully"
