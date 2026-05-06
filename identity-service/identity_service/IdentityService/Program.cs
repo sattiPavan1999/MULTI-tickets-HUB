@@ -36,8 +36,8 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 var jwtSecretKey = builder.Configuration["JwtSettings:SecretKey"]
     ?? throw new InvalidOperationException("JWT SecretKey not configured");
 
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "IdentityService";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "TicketHub";
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "tickethub-issuer";
+var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "tickethub-audience";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

@@ -35,8 +35,8 @@ services:
       - ASPNETCORE_URLS=http://+:5001
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=identity_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
-      - JwtSettings__Issuer=IdentityService
-      - JwtSettings__Audience=TicketHub
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__ExpiryMinutes=60
     depends_on:
       postgres:
@@ -94,8 +94,8 @@ services:
       - ServiceEndpoints__IdentityServiceUrl=http://identity-service:5001
       - ServiceEndpoints__TrainServiceUrl=http://train-service:5002
       - ServiceEndpoints__MovieServiceUrl=http://movie-service:5003
-      - JwtSettings__Issuer=tickethub-issuer
-      - JwtSettings__Audience=tickethub-audience
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
     depends_on:
       - identity-service
@@ -115,9 +115,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5000
-      - JwtSettings__Issuer=BookingPlatform
-      - JwtSettings__Audience=BookingPlatformUsers
-      - JwtSettings__SecretKey=${JWT_GATEWAY_SECRET_KEY}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
       - JwtSettings__TokenExpiryMinutes=60
     depends_on:
       - identity-service
