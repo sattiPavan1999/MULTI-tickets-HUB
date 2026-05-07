@@ -1,7 +1,8 @@
 using System.Net;
 using System.Text.Json;
-using IdentityService.Endpoints.Middleware;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
+using IdentityService.Endpoints.Middleware;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -75,7 +76,7 @@ public class GlobalExceptionMiddlewareTests
         context.Response.Body = new MemoryStream();
 
         RequestDelegate next = (HttpContext ctx) =>
-            throw new InvalidOperationException("Email already registered");
+            throw new ConflictException("Email already registered");
 
         var middleware = new GlobalExceptionMiddleware(next, _logger);
 
@@ -103,7 +104,7 @@ public class GlobalExceptionMiddlewareTests
         context.Response.Body = new MemoryStream();
 
         RequestDelegate next = (HttpContext ctx) =>
-            throw new InvalidOperationException("User not found");
+            throw new NotFoundException("User not found");
 
         var middleware = new GlobalExceptionMiddleware(next, _logger);
 

@@ -1,5 +1,6 @@
 using IdentityService.Core.Data;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using IdentityService.Core.Services;
@@ -25,7 +26,12 @@ public class AuthServiceTests
         var resetRepo = new PasswordResetTokenRepository(db, NullLogger<PasswordResetTokenRepository>.Instance);
         var jwt = new StubJwtService();
         var audit = new StubAuditService();
-        var config = configuration ?? new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var config = configuration ?? new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_ENVIRONMENT"] = "Development"
+            })
+            .Build();
 
         var service = new AuthService(
             userRepo,
@@ -92,7 +98,7 @@ public class AuthServiceTests
         var user = await SeedUserAsync(db, "user@example.com");
         await SeedUserAsync(db, "taken@example.com");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ConflictException>(() =>
             service.UpdateProfileAsync(user.Id, new UpdateProfileInput
             {
                 Email = "taken@example.com"
@@ -104,7 +110,7 @@ public class AuthServiceTests
     {
         var (service, _) = BuildService(nameof(UpdateProfile_UnknownUser_Throws));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             service.UpdateProfileAsync(9999, new UpdateProfileInput
             {
                 FullName = "X"
