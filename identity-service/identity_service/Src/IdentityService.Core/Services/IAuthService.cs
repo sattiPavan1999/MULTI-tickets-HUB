@@ -30,4 +30,15 @@ public interface IAuthService
     Task<List<UserType>> GetAllUsersAsync();
 
     Task<int> GetUserCountAsync();
+
+    /// <summary>
+    /// Initiate a "Forgot Password" flow. Returns a response that always succeeds
+    /// to avoid leaking which emails are registered.
+    /// </summary>
+    Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input);
+
+    /// <summary>
+    /// Complete a "Forgot Password" flow by consuming a reset token and setting a new password.
+    /// </summary>
+    Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input);
 }

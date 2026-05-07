@@ -27,6 +27,7 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
 
 // Register repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
 
 // Register services
 builder.Services.AddScoped<IAuthService, AuthService>();

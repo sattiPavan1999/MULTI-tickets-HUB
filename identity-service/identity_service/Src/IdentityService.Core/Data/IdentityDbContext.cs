@@ -13,6 +13,11 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
     /// </summary>
     public DbSet<User> Users { get; set; } = null!;
 
+    /// <summary>
+    /// Password reset tokens table
+    /// </summary>
+    public DbSet<PasswordResetToken> PasswordResetTokens { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -54,6 +59,37 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
             entity.Property(e => e.CreatedAt)
                 .IsRequired()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.ToTable("PasswordResetTokens");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.TokenHash)
+                .IsRequired()
+                .HasMaxLength(128);
+
+            entity.HasIndex(e => e.TokenHash)
+                .IsUnique();
+
+            entity.Property(e => e.ExpiresAt)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAt)
+                .IsRequired()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.UserId);
         });
     }
 }

@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using IdentityService.Core.DTOs;
 using IdentityService.Core.Models;
@@ -11,19 +14,25 @@ namespace IdentityService.Core.Services;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IPasswordResetTokenRepository _resetTokenRepository;
     private readonly IJwtService _jwtService;
     private readonly IAuditService _auditService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IUserRepository userRepository,
+        IPasswordResetTokenRepository resetTokenRepository,
         IJwtService jwtService,
         IAuditService auditService,
+        IConfiguration configuration,
         ILogger<AuthService> logger)
     {
         _userRepository = userRepository;
+        _resetTokenRepository = resetTokenRepository;
         _jwtService = jwtService;
         _auditService = auditService;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -106,6 +115,18 @@ public class AuthService : IAuthService
             user.PhoneNumber = input.PhoneNumber;
         }
 
+        if (!string.IsNullOrWhiteSpace(input.Email)
+            && !string.Equals(input.Email, user.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _userRepository.EmailExistsAsync(input.Email))
+            {
+                _logger.LogWarning("Profile update rejected — email already registered: {Email}", input.Email);
+                throw new InvalidOperationException("Email already registered");
+            }
+
+            user.Email = input.Email;
+        }
+
         var updatedUser = await _userRepository.UpdateAsync(user);
 
         await _auditService.LogAsync($"User profile updated: {updatedUser.Email}");
@@ -122,6 +143,89 @@ public class AuthService : IAuthService
     public async Task<int> GetUserCountAsync()
     {
         return await _userRepository.CountAsync();
+    }
+
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input)
+    {
+        var user = await _userRepository.GetByEmailAsync(input.Email);
+
+        if (user == null)
+        {
+            _logger.LogInformation("Forgot password requested for unknown email: {Email}", input.Email);
+            await _auditService.LogAsync($"Forgot password (no user): {input.Email}");
+            return new ForgotPasswordResponse
+            {
+                Message = "If the email is registered, a reset token has been issued."
+            };
+        }
+
+        await _resetTokenRepository.InvalidateActiveForUserAsync(user.Id);
+
+        var plainToken = GenerateResetToken();
+        var tokenHash = HashToken(plainToken);
+        var expiryMinutes = int.Parse(_configuration["PasswordReset:TokenExpiryMinutes"] ?? "30");
+        var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
+
+        await _resetTokenRepository.CreateAsync(new PasswordResetToken
+        {
+            UserId = user.Id,
+            TokenHash = tokenHash,
+            ExpiresAt = expiresAt
+        });
+
+        await _auditService.LogAsync($"Password reset token issued for: {user.Email}");
+
+        return new ForgotPasswordResponse
+        {
+            Message = "If the email is registered, a reset token has been issued.",
+            ResetToken = plainToken,
+            ExpiresAt = expiresAt
+        };
+    }
+
+    public async Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input)
+    {
+        var tokenHash = HashToken(input.Token);
+        var resetToken = await _resetTokenRepository.GetActiveByHashAsync(tokenHash);
+
+        if (resetToken == null)
+        {
+            _logger.LogWarning("Password reset attempted with invalid or expired token");
+            await _auditService.LogAsync("Password reset failed: invalid or expired token");
+            throw new UnauthorizedAccessException("Reset token is invalid or has expired");
+        }
+
+        var user = await _userRepository.GetByIdAsync(resetToken.UserId);
+
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(input.NewPassword);
+        await _userRepository.UpdateAsync(user);
+
+        await _resetTokenRepository.MarkUsedAsync(resetToken);
+
+        await _auditService.LogAsync($"Password reset for user: {user.Email}");
+
+        return new OperationResult
+        {
+            Success = true,
+            Message = "Password has been reset"
+        };
+    }
+
+    private static string GenerateResetToken()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(32);
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string HashToken(string plainToken)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(plainToken));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     private static UserType MapToUserType(User user)

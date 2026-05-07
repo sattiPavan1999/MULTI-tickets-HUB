@@ -49,4 +49,20 @@ public class AuthController : ControllerBase
         var user = await _authService.UpdateProfileAsync(userId, input);
         return Ok(user);
     }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordInput input)
+    {
+        var response = await _authService.ForgotPasswordAsync(input);
+        return Ok(response);
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<OperationResult>> ResetPassword([FromBody] ResetPasswordInput input)
+    {
+        var response = await _authService.ResetPasswordAsync(input);
+        return Ok(response);
+    }
 }
