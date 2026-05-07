@@ -30,16 +30,19 @@ public class Query
         return user;
     }
 
+    [Authorize]
     public async Task<UserType?> GetUser(int id, [Service] IAuthService authService)
     {
         return await authService.GetUserByIdAsync(id);
     }
 
+    [Authorize]
     public async Task<List<UserType>> GetUsers([Service] IAuthService authService)
     {
         return await authService.GetAllUsersAsync();
     }
 
+    [Authorize]
     public async Task<int> GetUserCount([Service] IAuthService authService)
     {
         return await authService.GetUserCountAsync();

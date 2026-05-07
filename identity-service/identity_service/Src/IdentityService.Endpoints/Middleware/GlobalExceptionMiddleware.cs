@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
 
 namespace IdentityService.Endpoints.Middleware;
 
@@ -40,10 +41,8 @@ public class GlobalExceptionMiddleware
         var (statusCode, errorCode, message) = exception switch
         {
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "UNAUTHORIZED", exception.Message),
-            InvalidOperationException ex when ex.Message.Contains("Email already registered") =>
-                (HttpStatusCode.Conflict, "EMAIL_EXISTS", exception.Message),
-            InvalidOperationException ex when ex.Message.Contains("not found") =>
-                (HttpStatusCode.NotFound, "NOT_FOUND", exception.Message),
+            ConflictException => (HttpStatusCode.Conflict, "EMAIL_EXISTS", exception.Message),
+            NotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND", exception.Message),
             _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR", "An error occurred processing your request")
         };
 

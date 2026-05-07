@@ -1,5 +1,5 @@
-export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const PHONE_REGEX = /^[+]?[\d\s\-()]{7,20}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[+]?[\d\s\-()]{7,20}$/;
 
 export function validateEmail(value: string): string | undefined {
   if (!value.trim()) return 'Email is required';

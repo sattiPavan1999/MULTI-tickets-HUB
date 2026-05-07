@@ -27,6 +27,10 @@ public class JwtValidationMiddleware
 
         // Skip JWT validation for public routes and health endpoints
         if (path.StartsWith("/graphql/auth") ||
+            path == "/api/auth/login" ||
+            path == "/api/auth/register" ||
+            path == "/api/auth/forgot-password" ||
+            path == "/api/auth/reset-password" ||
             path.StartsWith("/health") ||
             path == "/")
         {
@@ -157,14 +161,15 @@ public class JwtValidationMiddleware
             errorMessage = "Invalid token signature";
             return false;
         }
-        catch (SecurityTokenException ex)
+        catch (SecurityTokenException)
         {
-            errorMessage = $"Token validation failed: {ex.Message}";
+            errorMessage = "Token validation failed";
             return false;
         }
         catch (Exception ex)
         {
-            errorMessage = $"Token validation error: {ex.Message}";
+            _logger.LogError(ex, "Unexpected error during token validation");
+            errorMessage = "Token validation failed";
             return false;
         }
     }

@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 
@@ -41,7 +42,7 @@ public class AuthService : IAuthService
         if (await _userRepository.EmailExistsAsync(input.Email))
         {
             _logger.LogWarning("Registration attempt with existing email: {Email}", input.Email);
-            throw new InvalidOperationException("Email already registered");
+            throw new ConflictException("Email already registered");
         }
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(input.Password);
@@ -102,7 +103,7 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
-            throw new InvalidOperationException("User not found");
+            throw new NotFoundException("User not found");
         }
 
         if (!string.IsNullOrWhiteSpace(input.FullName))
@@ -121,7 +122,7 @@ public class AuthService : IAuthService
             if (await _userRepository.EmailExistsAsync(input.Email))
             {
                 _logger.LogWarning("Profile update rejected — email already registered: {Email}", input.Email);
-                throw new InvalidOperationException("Email already registered");
+                throw new ConflictException("Email already registered");
             }
 
             user.Email = input.Email;
@@ -175,11 +176,16 @@ public class AuthService : IAuthService
 
         await _auditService.LogAsync($"Password reset token issued for: {user.Email}");
 
+        var isDevelopment = string.Equals(
+            _configuration["ASPNETCORE_ENVIRONMENT"],
+            "Development",
+            StringComparison.OrdinalIgnoreCase);
+
         return new ForgotPasswordResponse
         {
             Message = "If the email is registered, a reset token has been issued.",
-            ResetToken = plainToken,
-            ExpiresAt = expiresAt
+            ResetToken = isDevelopment ? plainToken : null,
+            ExpiresAt = isDevelopment ? expiresAt : null
         };
     }
 
@@ -199,7 +205,7 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
-            throw new InvalidOperationException("User not found");
+            throw new NotFoundException("User not found");
         }
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(input.NewPassword);

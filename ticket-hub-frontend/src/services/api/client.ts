@@ -1,9 +1,9 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios';
 import { ApiError, type ApiErrorResponse } from '@/types/api';
-import { tokenStorage } from '@/utils/storage';
+import { tokenStorage, userStorage } from '@/utils/storage';
 
 const baseURL =
-  import.meta.env.VITE_IDENTITY_API_URL?.replace(/\/$/, '') || 'http://localhost:5001';
+  import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5000';
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
@@ -23,6 +23,12 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiErrorResponse>) => {
+    if (error.response?.status === 401) {
+      tokenStorage.clear();
+      userStorage.clear();
+      window.location.href = '/auth';
+      return Promise.reject(new ApiError('Session expired. Please sign in again.', 401, 'UNAUTHORIZED'));
+    }
     if (error.response) {
       const data = error.response.data;
       const message =
