@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { AuthPage } from '@/pages/AuthPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -8,11 +9,23 @@ import { NotFoundPage } from '@/pages/NotFoundPage';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute';
+import { useAuth } from '@/hooks/useAuth';
+
+function LogoutPage() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => {
+    logout();
+    navigate('/auth', { replace: true });
+  }, [logout, navigate]);
+  return null;
+}
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/auth" replace />} />
+      <Route path="/logout" element={<LogoutPage />} />
 
       <Route element={<PublicOnlyRoute />}>
         <Route path="/auth" element={<AuthPage />} />
