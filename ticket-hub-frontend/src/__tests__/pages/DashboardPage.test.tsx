@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Routes, Route } from 'react-router-dom';
-import { DashboardPage } from './DashboardPage';
+import { DashboardPage } from '@/pages/DashboardPage';
 import { TestRouter } from '@/test/utils';
 
 vi.mock('@/hooks/useAuth', () => ({

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ProfilePage } from './ProfilePage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import { TestRouter } from '@/test/utils';
 
 const mockUpdateProfile = vi.hoisted(() => vi.fn());

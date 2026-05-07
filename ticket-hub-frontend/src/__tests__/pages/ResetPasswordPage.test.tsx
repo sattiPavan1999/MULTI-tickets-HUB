@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Routes, Route } from 'react-router-dom';
-import { ResetPasswordPage } from './ResetPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { TestRouter } from '@/test/utils';
 
 const mockResetPassword = vi.hoisted(() => vi.fn());

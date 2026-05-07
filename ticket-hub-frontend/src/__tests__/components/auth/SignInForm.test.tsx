@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Routes, Route } from 'react-router-dom';
-import { SignInForm } from './SignInForm';
+import { SignInForm } from '@/components/auth/SignInForm';
 import { TestRouter } from '@/test/utils';
 
 const mockLogin = vi.hoisted(() => vi.fn());
