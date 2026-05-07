@@ -4,17 +4,18 @@ WORKDIR /src
 
 # Copy solution and project files
 COPY AdminBFF.slnx .
-COPY AdminBFF/AdminBFF.csproj AdminBFF/
-COPY AdminBFF.Tests/AdminBFF.Tests.csproj AdminBFF.Tests/
+COPY Src/AdminBFF.Core/AdminBFF.Core.csproj Src/AdminBFF.Core/
+COPY Src/AdminBFF.Endpoints/AdminBFF.Endpoints.csproj Src/AdminBFF.Endpoints/
+COPY Tests/AdminBFF.Tests/AdminBFF.Tests.csproj Tests/AdminBFF.Tests/
 
 # Restore dependencies
-RUN dotnet restore AdminBFF/AdminBFF.csproj
+RUN dotnet restore Src/AdminBFF.Endpoints/AdminBFF.Endpoints.csproj
 
 # Copy all source files
 COPY . .
 
 # Build and publish
-WORKDIR /src/AdminBFF
+WORKDIR /src/Src/AdminBFF.Endpoints
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
 # Stage 2: Runtime

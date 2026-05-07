@@ -3,14 +3,15 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY TrainService.slnx .
-COPY TrainService/TrainService.csproj TrainService/
-COPY TrainService.Tests/TrainService.Tests.csproj TrainService.Tests/
+COPY Src/TrainService.Core/TrainService.Core.csproj Src/TrainService.Core/
+COPY Src/TrainService.Endpoints/TrainService.Endpoints.csproj Src/TrainService.Endpoints/
+COPY Tests/TrainService.Tests/TrainService.Tests.csproj Tests/TrainService.Tests/
 
-RUN dotnet restore TrainService/TrainService.csproj
+RUN dotnet restore Src/TrainService.Endpoints/TrainService.Endpoints.csproj
 
 COPY . .
 
-WORKDIR /src/TrainService
+WORKDIR /src/Src/TrainService.Endpoints
 RUN dotnet publish -c Release -o /app/publish
 
 # Stage 2: Runtime

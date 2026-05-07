@@ -4,17 +4,18 @@ WORKDIR /src
 
 # Copy solution and project files
 COPY IdentityService.slnx ./
-COPY IdentityService/IdentityService.csproj IdentityService/
-COPY IdentityService.Tests/IdentityService.Tests.csproj IdentityService.Tests/
+COPY Src/IdentityService.Core/IdentityService.Core.csproj Src/IdentityService.Core/
+COPY Src/IdentityService.Endpoints/IdentityService.Endpoints.csproj Src/IdentityService.Endpoints/
+COPY Tests/IdentityService.Tests/IdentityService.Tests.csproj Tests/IdentityService.Tests/
 
 # Restore dependencies
-RUN dotnet restore IdentityService/IdentityService.csproj
+RUN dotnet restore Src/IdentityService.Endpoints/IdentityService.Endpoints.csproj
 
 # Copy all source files
 COPY . .
 
 # Build and publish the application
-WORKDIR /src/IdentityService
+WORKDIR /src/Src/IdentityService.Endpoints
 RUN dotnet publish -c Release -o /app/publish
 
 # Stage 2: Runtime

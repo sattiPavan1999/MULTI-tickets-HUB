@@ -1,4 +1,5 @@
 <Solution>
-  <Project Path="MovieService.Tests/MovieService.Tests.csproj" />
-  <Project Path="MovieService/MovieService.csproj" />
+  <Project Path="Src/MovieService.Core/MovieService.Core.csproj" />
+  <Project Path="Src/MovieService.Endpoints/MovieService.Endpoints.csproj" />
+  <Project Path="Tests/MovieService.Tests/MovieService.Tests.csproj" />
 </Solution>

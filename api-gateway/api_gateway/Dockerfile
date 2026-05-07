@@ -4,17 +4,17 @@ WORKDIR /src
 
 # Copy solution and project files
 COPY ApiGateway.slnx .
-COPY ApiGateway/ApiGateway.csproj ApiGateway/
-COPY ApiGateway.Tests/ApiGateway.Tests.csproj ApiGateway.Tests/
+COPY Src/ApiGateway/ApiGateway.csproj Src/ApiGateway/
+COPY Tests/ApiGateway.Tests/ApiGateway.Tests.csproj Tests/ApiGateway.Tests/
 
 # Restore dependencies
-RUN dotnet restore ApiGateway/ApiGateway.csproj
+RUN dotnet restore Src/ApiGateway/ApiGateway.csproj
 
 # Copy source code
 COPY . .
 
 # Build and publish
-WORKDIR /src/ApiGateway
+WORKDIR /src/Src/ApiGateway
 RUN dotnet publish -c Release -o /app/publish
 
 # Stage 2: Runtime

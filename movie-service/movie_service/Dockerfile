@@ -4,17 +4,18 @@ WORKDIR /src
 
 # Copy solution and project files
 COPY MovieService.slnx .
-COPY MovieService/MovieService.csproj MovieService/
-COPY MovieService.Tests/MovieService.Tests.csproj MovieService.Tests/
+COPY Src/MovieService.Core/MovieService.Core.csproj Src/MovieService.Core/
+COPY Src/MovieService.Endpoints/MovieService.Endpoints.csproj Src/MovieService.Endpoints/
+COPY Tests/MovieService.Tests/MovieService.Tests.csproj Tests/MovieService.Tests/
 
 # Restore dependencies
-RUN dotnet restore MovieService/MovieService.csproj
+RUN dotnet restore Src/MovieService.Endpoints/MovieService.Endpoints.csproj
 
 # Copy all source files
 COPY . .
 
 # Build and publish
-WORKDIR /src/MovieService
+WORKDIR /src/Src/MovieService.Endpoints
 RUN dotnet publish -c Release -o /app/publish
 
 # Stage 2: Runtime

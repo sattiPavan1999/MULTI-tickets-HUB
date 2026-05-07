@@ -1,4 +1,5 @@
 <Solution>
-  <Project Path="AdminBFF.Tests/AdminBFF.Tests.csproj" />
-  <Project Path="AdminBFF/AdminBFF.csproj" />
+  <Project Path="Src/AdminBFF.Core/AdminBFF.Core.csproj" />
+  <Project Path="Src/AdminBFF.Endpoints/AdminBFF.Endpoints.csproj" />
+  <Project Path="Tests/AdminBFF.Tests/AdminBFF.Tests.csproj" />
 </Solution>
