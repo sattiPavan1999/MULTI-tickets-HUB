@@ -110,3 +110,12 @@ JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `ide
 ### Test infrastructure
 
 `identity-service/.../IdentityService.Tests.csproj` pulls in `Microsoft.AspNetCore.Mvc.Testing`, `Microsoft.EntityFrameworkCore.InMemory`, and `Testcontainers.PostgreSql` — meaning integration tests can either use the in-memory provider or spin up a real Postgres container. `BCrypt.Net-Next` is in the test project for password-hash assertions.
+
+## Workflow rules
+
+**Always ask for explicit permission before running any of the following git operations:**
+- `git add` / staging files
+- `git commit`
+- `git push`
+
+Do not stage, commit, or push automatically after completing a task. Present the changes, then wait for the user to say "stage", "commit", "push", or equivalent before proceeding.

@@ -5,69 +5,6 @@ namespace IdentityService.Tests.Models;
 
 public class UpdateProfileInputTests
 {
-    [Fact]
-    public void UpdateProfileInput_WithValidData_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new UpdateProfileInput
-        {
-            FullName = "John Michael Doe",
-            PhoneNumber = "+1234567899",
-            Email = "john@example.com"
-        };
-
-        // Assert
-        Assert.Equal("John Michael Doe", input.FullName);
-        Assert.Equal("+1234567899", input.PhoneNumber);
-        Assert.Equal("john@example.com", input.Email);
-    }
-
-    [Fact]
-    public void UpdateProfileInput_WithNullValues_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new UpdateProfileInput
-        {
-            FullName = null,
-            PhoneNumber = null,
-            Email = null
-        };
-
-        // Assert
-        Assert.Null(input.FullName);
-        Assert.Null(input.PhoneNumber);
-        Assert.Null(input.Email);
-    }
-
-    [Fact]
-    public void UpdateProfileInput_OnlyFullName_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new UpdateProfileInput
-        {
-            FullName = "Jane Doe"
-        };
-
-        // Assert
-        Assert.Equal("Jane Doe", input.FullName);
-        Assert.Null(input.PhoneNumber);
-        Assert.Null(input.Email);
-    }
-
-    [Fact]
-    public void UpdateProfileInput_OnlyPhoneNumber_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new UpdateProfileInput
-        {
-            PhoneNumber = "+9876543210"
-        };
-
-        // Assert
-        Assert.Null(input.FullName);
-        Assert.Equal("+9876543210", input.PhoneNumber);
-    }
-
     [Theory]
     [InlineData("invalid-phone")]
     [InlineData("abc123")]

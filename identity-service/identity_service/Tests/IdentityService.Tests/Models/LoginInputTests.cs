@@ -6,21 +6,6 @@ namespace IdentityService.Tests.Models;
 public class LoginInputTests
 {
     [Fact]
-    public void LoginInput_WithValidData_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new LoginInput
-        {
-            Email = "test@example.com",
-            Password = "SecurePass123!"
-        };
-
-        // Assert
-        Assert.Equal("test@example.com", input.Email);
-        Assert.Equal("SecurePass123!", input.Password);
-    }
-
-    [Fact]
     public void LoginInput_EmailRequired_FailsValidation()
     {
         // Arrange

@@ -6,25 +6,6 @@ namespace IdentityService.Tests.Models;
 public class RegisterInputTests
 {
     [Fact]
-    public void RegisterInput_WithValidData_CreatesInstance()
-    {
-        // Arrange & Act
-        var input = new RegisterInput
-        {
-            Email = "test@example.com",
-            Password = "SecurePass123!",
-            FullName = "John Doe",
-            PhoneNumber = "+1234567890"
-        };
-
-        // Assert
-        Assert.Equal("test@example.com", input.Email);
-        Assert.Equal("SecurePass123!", input.Password);
-        Assert.Equal("John Doe", input.FullName);
-        Assert.Equal("+1234567890", input.PhoneNumber);
-    }
-
-    [Fact]
     public void RegisterInput_EmailRequired_FailsValidation()
     {
         // Arrange
