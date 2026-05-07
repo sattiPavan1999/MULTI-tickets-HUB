@@ -4,45 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This is a .NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains, with an admin surface). **Source has been intentionally stripped from `admin-bff`, `movie-service`, and `train-service`** (commit `368d3b8`). Their `Src/*.Core/{Services,Repositories,Models,DTOs,Data}` and `Src/*.Endpoints/{Controllers,GraphQL,Middleware}` directories are empty; only `Program.cs`, `*.csproj`, `appsettings*.json`, and `Dockerfile` remain. `Program.cs` in those services still references types (`AppDbContext`, `IMovieRepository`, `Query`, `SeedData`, `GlobalExceptionMiddleware`, etc.) that no longer exist on disk — so those three services **will not compile or run as-is**. Only `identity-service` and `api-gateway` are fully implemented.
+.NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains + admin), plus a React frontend. **`admin-bff`, `movie-service`, and `train-service` have had their source intentionally stripped** (commit `368d3b8`) — only `Program.cs`, `*.csproj`, `appsettings*.json`, and `Dockerfile` survive. Those three services will not compile. When asked to work on them, treat the surviving `Program.cs` as the contract spec and reconstruct from it using `identity-service` as the canonical reference.
 
-When asked to work on `movie-service`, `train-service`, or `admin-bff`, treat the surviving `Program.cs` and `csproj` as the contract spec for what was there, and reconstruct from that — do not assume the missing files are findable elsewhere in the tree.
+Only `identity-service`, `api-gateway`, and `ticket-hub-frontend` are fully implemented.
 
 ## Common commands
 
-All services run from the repo root via Docker Compose:
+### Docker (run from repo root)
 
 ```bash
-cp .env.example .env                 # required: JWT_SECRET_KEY must be ≥32 chars
-docker-compose up --build            # brings up postgres + all 5 services
-docker-compose up postgres identity-service api-gateway   # subset (only services that compile today)
-docker-compose logs -f identity-service
-docker-compose down -v               # also drops the postgres volume
+cp .env.example .env                                          # JWT_SECRET_KEY must be ≥ 32 chars
+docker-compose up postgres identity-service api-gateway       # only services that compile today
+docker-compose up --build                                     # full stack
+docker-compose down -v                                        # also drops the postgres volume
 ```
 
-Per-service .NET workflow (each service has its own `.slnx`):
+### .NET services (each has its own `.slnx`)
 
 ```bash
-# Build a single service
 dotnet build identity-service/identity_service/IdentityService.slnx
 dotnet build api-gateway/api_gateway/ApiGateway.slnx
 
-# Run tests (only identity-service and api-gateway have working test projects)
 dotnet test identity-service/identity_service/IdentityService.slnx
 dotnet test api-gateway/api_gateway/ApiGateway.slnx
 
-# Run a single test by fully-qualified name or pattern
-dotnet test identity-service/identity_service/IdentityService.slnx --filter "FullyQualifiedName~HealthControllerTests"
+# Filter to a single test class or name pattern
+dotnet test identity-service/identity_service/IdentityService.slnx --filter "FullyQualifiedName~AuthServiceTests"
 dotnet test identity-service/identity_service/IdentityService.slnx --filter "DisplayName~Login"
 
-# Run a service locally without Docker (requires Postgres running on 5435 + .env vars exported)
+# Run locally without Docker (needs Postgres on 5435 + .env vars exported)
 dotnet run --project identity-service/identity_service/Src/IdentityService.Endpoints
 ```
 
-EF Core migrations (identity-service is the only service with a real `DbContext` + migrations on disk):
+### EF Core migrations (identity-service only)
 
 ```bash
-# From identity-service/identity_service
+# Run from identity-service/identity_service/
 dotnet ef migrations add <Name> \
   --project Src/IdentityService.Core \
   --startup-project Src/IdentityService.Endpoints
@@ -51,7 +48,19 @@ dotnet ef database update \
   --startup-project Src/IdentityService.Endpoints
 ```
 
-Migrations are also applied automatically at service startup via `dbContext.Database.Migrate()` in each service's `Program.cs`.
+Migrations also apply automatically at startup via `dbContext.Database.Migrate()`.
+
+### Frontend
+
+```bash
+cd ticket-hub-frontend
+cp .env.example .env   # sets VITE_API_URL=http://localhost:5000
+npm install
+npm run dev            # http://localhost:5173
+npm run lint           # tsc type-check only
+npm test               # vitest run (single pass)
+npm run test:watch     # vitest watch mode
+```
 
 ## Architecture
 
@@ -63,53 +72,73 @@ Migrations are also applied automatically at service startup via `dbContext.Data
 | `identity-service` | 5001 | Auth, users, JWT issuance |
 | `train-service` | 5002 | Train domain (stripped) |
 | `movie-service` | 5003 | Movie domain (stripped) |
-| `admin-bff` | 5004 | Admin Backend-for-Frontend, fans out to the 3 domain services (stripped) |
+| `admin-bff` | 5004 | Admin BFF, fans out to domain services (stripped) |
 | `postgres` | host 5435 → 5432 | Single Postgres 17 instance, three logical DBs |
+| `ticket-hub-frontend` | 5173 (dev) | React + TypeScript + Tailwind SPA |
 
-`postgres/init.sql` creates `identity_db`, `movies_db`, `trains_db` on first container start. Each domain service connects to its own DB; `admin-bff` and `api-gateway` are stateless.
+`postgres/init.sql` creates `identity_db`, `movies_db`, `trains_db` on first container start.
 
 ### Request flow
 
-External clients only talk to the **api-gateway** (`http://localhost:5000`). It:
-1. Runs `JwtValidationMiddleware` (`api-gateway/.../Middleware/JwtValidationMiddleware.cs`) which whitelists `/graphql/auth`, `/health`, and `/` and requires a Bearer token for everything else. Admin routes additionally require a `role` claim of `Admin`.
-2. Routes via YARP (config in `api-gateway/.../appsettings.json`) using path prefixes that get rewritten to `/graphql` on the upstream:
+The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000`). The gateway handles two route types:
+
+1. **REST pass-through** — `/api/auth/{**catch-all}` → `identity-service:5001/api/auth` (no path rewrite). Public endpoints (`/login`, `/register`, `/forgot-password`, `/reset-password`) are whitelisted in `JwtValidationMiddleware`; `/api/auth/profile` requires a valid JWT.
+
+2. **GraphQL proxy** — path prefixes rewritten to `/graphql` on the upstream:
    - `/graphql/auth/**` → `identity-service:5001/graphql`
    - `/graphql/trains/**` → `train-service:5002/graphql`
    - `/graphql/movies/**` → `movie-service:5003/graphql`
    - `/graphql/admin/**` → `admin-bff:5004/graphql`
 
-The gateway does **not** forward to REST controllers on the upstream services — those controllers (e.g. identity's `AuthController` at `/api/auth/{register,login,profile}`) are reachable only when calling the upstream directly.
+`JwtValidationMiddleware` in the gateway whitelists `/graphql/auth`, `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/health`, and `/`. All other paths require a Bearer JWT. Admin GraphQL routes additionally require `role == "Admin"`.
 
 ### GraphQL + REST split
 
-Convention across all services (per `Program.cs` comments): **GraphQL (Hot Chocolate 13.9.14) handles queries only; writes go through REST controllers**. When adding a new feature:
-- Add reads to `GraphQL/Query.cs` (e.g. `IdentityService.Endpoints.GraphQL.Query`).
-- Add writes as `[ApiController]` actions under `Controllers/`.
+Convention across all services: **GraphQL (HotChocolate 13.9.14) handles reads; writes go through REST controllers**.
+- Reads → `GraphQL/Query.cs`
+- Writes → `[ApiController]` actions under `Controllers/`
 
-### Service-internal layout
+All GraphQL queries in identity-service require `[Authorize]`.
 
-Every service (working or stripped) follows the same two-project + tests structure:
+### .NET service-internal layout
 
 ```
 <service>/<service>_service/
-  <Service>.slnx
-  Dockerfile
   Src/
-    <Service>.Core/         # Models, DTOs, Data (DbContext + Migrations), Repositories, Services
-    <Service>.Endpoints/    # Program.cs, Controllers, GraphQL, Middleware, appsettings
+    <Service>.Core/       Models, DTOs, Data (DbContext + Migrations), Repositories, Services, Exceptions
+    <Service>.Endpoints/  Program.cs, Controllers, GraphQL/Query.cs, Middleware, appsettings
   Tests/
-    <Service>.Tests/        # xUnit + Microsoft.AspNetCore.Mvc.Testing + Testcontainers.PostgreSql
+    <Service>.Tests/      xUnit + Moq + EF InMemory; organised as Controllers/, GraphQL/, Middleware/, Models/, Repositories/, Services/
 ```
 
-`Endpoints` references `Core`; `Tests` references both. Use `identity-service` as the canonical reference when reconstructing or extending the stripped services — its DI registration order in `Program.cs` (DbContext → repositories → services → JWT auth → GraphQL → CORS → migrations on startup) is the pattern the others' `Program.cs` files expect.
+DI registration order in `Program.cs` (use identity-service as the template):
+`DbContext → Repositories → Services → JWT auth → GraphQL → CORS → migrations on startup`
+
+### Custom exceptions (identity-service)
+
+`IdentityService.Core/Exceptions/` contains `ConflictException` (→ HTTP 409) and `NotFoundException` (→ HTTP 404). `GlobalExceptionMiddleware` pattern-matches on these types — never use string-matching `InvalidOperationException` for known error cases.
 
 ### Cross-service auth
 
-JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `identity-service` (issues), `api-gateway` (validates at the edge), and `admin-bff` (validates again for direct calls). All three read from the same env vars in `docker-compose.yml`. The `appsettings.json` files contain a placeholder secret — production must override via environment. **The api-gateway and admin-bff both validate the token**, so secret/issuer/audience drift between any of those three services breaks all protected routes.
+JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `identity-service` (issues), `api-gateway` (validates at edge), and `admin-bff` (validates for direct calls). All three read from the same env vars in `docker-compose.yml`. Drift between any of these three breaks all protected routes. `appsettings.json` files contain a placeholder secret; always override via environment.
 
-### Test infrastructure
+### Frontend architecture
 
-`identity-service/.../IdentityService.Tests.csproj` pulls in `Microsoft.AspNetCore.Mvc.Testing`, `Microsoft.EntityFrameworkCore.InMemory`, and `Testcontainers.PostgreSql` — meaning integration tests can either use the in-memory provider or spin up a real Postgres container. `BCrypt.Net-Next` is in the test project for password-hash assertions.
+`ticket-hub-frontend/src/`:
+- **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage`), `ToastContext`
+- **`services/api/client.ts`** — Axios instance pointing at `VITE_API_URL`; request interceptor injects Bearer token; response interceptor clears storage and redirects to `/auth` on 401
+- **`routes/`** — `ProtectedRoute` (redirects unauthenticated to `/auth`), `PublicOnlyRoute` (redirects authenticated to `/dashboard`)
+- **`pages/`** — `AuthPage` (sign-in / sign-up / forgot-password in one view), `DashboardPage`, `ProfilePage`, `ResetPasswordPage`, `PlaceholderServicePage`
+
+`ForgotPasswordResponse.ResetToken` is only echoed back in Development; the frontend captures it from the API response and forwards it to `/reset-password?token=...` as a dev convenience.
+
+### Frontend test setup
+
+Uses **Vitest + React Testing Library**. Test files live under `src/__tests__/` mirroring the source tree (`components/auth/`, `pages/`, `routes/`). Shared helpers in `src/test/`:
+- `setup.ts` — imports `@testing-library/jest-dom`
+- `utils.tsx` — exports `TestRouter` (a `MemoryRouter` with React Router v7 future flags set to suppress deprecation warnings)
+
+Mocking pattern: `vi.hoisted(() => vi.fn())` for functions referenced inside `vi.mock` factories.
 
 ## Workflow rules
 
@@ -118,4 +147,4 @@ JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `ide
 - `git commit`
 - `git push`
 
-Do not stage, commit, or push automatically after completing a task. Present the changes, then wait for the user to say "stage", "commit", "push", or equivalent before proceeding.
+Do not stage, commit, or push automatically after completing a task. Present the changes, then wait for the user to confirm before proceeding.
