@@ -3,12 +3,8 @@ using MovieService.Core.Models;
 
 namespace MovieService.Core.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-    {
-    }
-
     public DbSet<Movie> Movies { get; set; } = null!;
     public DbSet<Cinema> Cinemas { get; set; } = null!;
     public DbSet<Screen> Screens { get; set; } = null!;

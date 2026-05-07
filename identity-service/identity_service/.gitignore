@@ -46,9 +46,6 @@ artifacts/
 *.db-shm
 *.db-wal
 
-# Entity Framework Migrations
-**/Migrations/*.Designer.cs
-
 # Environment files
 .env
 .env.local

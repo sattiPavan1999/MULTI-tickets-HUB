@@ -6,13 +6,8 @@ namespace IdentityService.Core.Data;
 /// <summary>
 /// Database context for Identity Service
 /// </summary>
-public class IdentityDbContext : DbContext
+public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
-    public IdentityDbContext(DbContextOptions<IdentityDbContext> options)
-        : base(options)
-    {
-    }
-
     /// <summary>
     /// Users table
     /// </summary>

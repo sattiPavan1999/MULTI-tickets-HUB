@@ -3,14 +3,10 @@ using TrainService.Core.Models;
 
 namespace TrainService.Core.Data;
 
-public class TrainDbContext : DbContext
+public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContext(options)
 {
-    public TrainDbContext(DbContextOptions<TrainDbContext> options) : base(options)
-    {
-    }
-
-    public DbSet<Train> Trains { get; set; }
-    public DbSet<TrainBooking> TrainBookings { get; set; }
+    public DbSet<Train> Trains { get; set; } = null!;
+    public DbSet<TrainBooking> TrainBookings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
