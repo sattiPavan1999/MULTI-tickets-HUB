@@ -2,7 +2,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using HotChocolate;
 using HotChocolate.Authorization;
+using HotChocolate.Data;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Models;
+using IdentityService.Core.Repositories;
 using IdentityService.Core.Services;
 
 namespace IdentityService.Endpoints.GraphQL;
@@ -10,41 +13,32 @@ namespace IdentityService.Endpoints.GraphQL;
 public class Query
 {
     [Authorize]
-    public async Task<UserType?> GetMe(ClaimsPrincipal claimsPrincipal, [Service] IAuthService authService)
+    public async Task<UserType?> GetMe(
+        ClaimsPrincipal claimsPrincipal,
+        [Service] IAuthService authService,
+        CancellationToken ct)
     {
         var userIdClaim = claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? claimsPrincipal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-        if (userIdClaim == null || !int.TryParse(userIdClaim, out var userId))
-        {
+        if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
             throw new UnauthorizedAccessException("Invalid token");
-        }
 
-        var user = await authService.GetUserByIdAsync(userId);
-
-        if (user == null)
-        {
-            throw new InvalidOperationException("User not found");
-        }
-
-        return user;
+        return await authService.GetUserByIdAsync(userId, ct)
+            ?? throw new InvalidOperationException("User not found");
     }
 
     [Authorize]
-    public async Task<UserType?> GetUser(int id, [Service] IAuthService authService)
-    {
-        return await authService.GetUserByIdAsync(id);
-    }
+    public async Task<UserType?> GetUser(int id, [Service] IAuthService authService, CancellationToken ct)
+        => await authService.GetUserByIdAsync(id, ct);
 
     [Authorize]
-    public async Task<List<UserType>> GetUsers([Service] IAuthService authService)
-    {
-        return await authService.GetAllUsersAsync();
-    }
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<User> GetUsers([Service] IUserRepository userRepository)
+        => userRepository.Query();
 
     [Authorize]
-    public async Task<int> GetUserCount([Service] IAuthService authService)
-    {
-        return await authService.GetUserCountAsync();
-    }
+    public async Task<int> GetUserCount([Service] IAuthService authService, CancellationToken ct)
+        => await authService.GetUserCountAsync(ct);
 }

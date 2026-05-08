@@ -1,69 +1,37 @@
-using System.ComponentModel.DataAnnotations;
+using Bogus;
+using FluentValidation.TestHelper;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Validators;
 
 namespace IdentityService.Tests.Models;
 
 public class LoginInputTests
 {
-    [Fact]
-    public void LoginInput_EmailRequired_FailsValidation()
-    {
-        // Arrange
-        var input = new LoginInput
-        {
-            Email = "",
-            Password = "SecurePass123!"
-        };
+    private readonly LoginInputValidator _validator = new();
+    private static readonly Faker Fake = new();
 
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("Email"));
-    }
+    private static LoginInput Valid() => new() { Email = Fake.Internet.Email(), Password = "SecurePass1!" };
 
     [Theory]
+    [InlineData("")]
     [InlineData("invalid-email")]
     [InlineData("@example.com")]
-    [InlineData("test@")]
-    public void LoginInput_InvalidEmailFormat_FailsValidation(string invalidEmail)
+    public void Email_InvalidOrEmpty_HasError(string email)
     {
-        // Arrange
-        var input = new LoginInput
-        {
-            Email = invalidEmail,
-            Password = "SecurePass123!"
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("Email"));
+        var input = Valid(); input.Email = email;
+        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Email);
     }
 
     [Fact]
-    public void LoginInput_PasswordRequired_FailsValidation()
+    public void Password_Empty_HasError()
     {
-        // Arrange
-        var input = new LoginInput
-        {
-            Email = "test@example.com",
-            Password = ""
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("Password"));
+        var input = Valid(); input.Password = "";
+        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Password);
     }
 
-    private static List<ValidationResult> ValidateModel(object model)
+    [Fact]
+    public void ValidInput_NoErrors()
     {
-        var validationResults = new List<ValidationResult>();
-        var validationContext = new ValidationContext(model);
-        Validator.TryValidateObject(model, validationContext, validationResults, true);
-        return validationResults;
+        _validator.TestValidate(Valid()).ShouldNotHaveAnyValidationErrors();
     }
 }

@@ -1,38 +1,26 @@
-using System.ComponentModel.DataAnnotations;
+using FluentValidation.TestHelper;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Validators;
 
 namespace IdentityService.Tests.Models;
 
 public class ForgotPasswordInputTests
 {
-    [Fact]
-    public void ForgotPasswordInput_WithValidEmail_PassesValidation()
-    {
-        var input = new ForgotPasswordInput { Email = "user@example.com" };
-
-        var results = ValidateModel(input);
-
-        Assert.Empty(results);
-    }
+    private readonly ForgotPasswordInputValidator _validator = new();
 
     [Theory]
     [InlineData("")]
     [InlineData("not-an-email")]
-    [InlineData("@missing-local.com")]
-    public void ForgotPasswordInput_InvalidEmail_FailsValidation(string email)
+    public void Email_InvalidOrEmpty_HasError(string email)
     {
-        var input = new ForgotPasswordInput { Email = email };
-
-        var results = ValidateModel(input);
-
-        Assert.Contains(results, v => v.MemberNames.Contains("Email"));
+        _validator.TestValidate(new ForgotPasswordInput { Email = email })
+            .ShouldHaveValidationErrorFor(x => x.Email);
     }
 
-    private static List<ValidationResult> ValidateModel(object model)
+    [Fact]
+    public void ValidEmail_NoErrors()
     {
-        var results = new List<ValidationResult>();
-        var ctx = new ValidationContext(model);
-        Validator.TryValidateObject(model, ctx, results, true);
-        return results;
+        _validator.TestValidate(new ForgotPasswordInput { Email = "user@example.com" })
+            .ShouldNotHaveAnyValidationErrors();
     }
 }

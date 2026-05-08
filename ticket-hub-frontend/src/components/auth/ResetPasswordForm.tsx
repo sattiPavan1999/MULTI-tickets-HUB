@@ -1,47 +1,43 @@
-import { useState, type FormEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { authApi } from '@/services/api/authApi';
 import { useToast } from '@/hooks/useToast';
-import {
-  validateConfirmPassword,
-  validatePassword,
-  validateToken,
-} from '@/utils/validation';
 import { ApiError } from '@/types/api';
+
+const schema = z
+  .object({
+    token: z.string().min(1, 'Reset token is required'),
+    password: z.string().min(1, 'Password is required').min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+type FormValues = z.infer<typeof schema>;
 
 interface ResetPasswordFormProps {
   initialToken?: string;
   onSuccess: () => void;
 }
 
-interface FormErrors {
-  token?: string;
-  password?: string;
-  confirmPassword?: string;
-}
-
 export function ResetPasswordForm({ initialToken = '', onSuccess }: ResetPasswordFormProps) {
   const toast = useToast();
-  const [token, setToken] = useState(initialToken);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [submitting, setSubmitting] = useState(false);
 
-  const validate = (): FormErrors => ({
-    token: validateToken(token),
-    password: validatePassword(password),
-    confirmPassword: validateConfirmPassword(password, confirmPassword),
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { token: initialToken },
   });
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = validate();
-    setErrors(next);
-    if (Object.values(next).some(Boolean)) return;
-
-    setSubmitting(true);
+  async function onSubmit({ token, password }: FormValues) {
     try {
       const result = await authApi.resetPassword({ token: token.trim(), newPassword: password });
       if (!result.success) {
@@ -51,51 +47,45 @@ export function ResetPasswordForm({ initialToken = '', onSuccess }: ResetPasswor
       toast.success(result.message || 'Password updated.', 'Password reset');
       onSuccess();
     } catch (e) {
-      const message =
-        e instanceof ApiError ? e.message : 'Unable to reset password. Please try again.';
+      const message = e instanceof ApiError ? e.message : 'Unable to reset password. Please try again.';
       toast.error(message, 'Reset failed');
-    } finally {
-      setSubmitting(false);
     }
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4 animate-fade-in">
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 animate-fade-in">
       <p className="text-sm text-white/60">
         Paste the reset token from your email and choose a new password.
       </p>
       <Input
+        {...register('token')}
         label="Reset token"
         autoComplete="one-time-code"
         placeholder="Reset token"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        error={errors.token}
+        error={errors.token?.message}
         required
       />
       <Input
+        {...register('password')}
         label="New password"
         type="password"
         autoComplete="new-password"
         placeholder="At least 8 characters"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        error={errors.password}
+        error={errors.password?.message}
         showPasswordToggle
         required
       />
       <Input
+        {...register('confirmPassword')}
         label="Confirm new password"
         type="password"
         autoComplete="new-password"
         placeholder="Re-enter new password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        error={errors.confirmPassword}
+        error={errors.confirmPassword?.message}
         showPasswordToggle
         required
       />
-      <Button type="submit" size="lg" fullWidth isLoading={submitting}>
+      <Button type="submit" size="lg" fullWidth isLoading={isSubmitting}>
         Update password
       </Button>
     </form>

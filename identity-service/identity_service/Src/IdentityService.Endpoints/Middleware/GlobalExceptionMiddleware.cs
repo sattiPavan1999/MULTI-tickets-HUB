@@ -1,30 +1,19 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using FluentValidation;
 using IdentityService.Core.DTOs;
 using IdentityService.Core.Exceptions;
 
 namespace IdentityService.Endpoints.Middleware;
 
-/// <summary>
-/// Global exception handling middleware
-/// </summary>
-public class GlobalExceptionMiddleware
+public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<GlobalExceptionMiddleware> _logger;
-
-    public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
-
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
-            await _next(context);
+            await next(context);
         }
         catch (Exception ex)
         {
@@ -36,10 +25,13 @@ public class GlobalExceptionMiddleware
     {
         var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
 
-        _logger.LogError(exception, "Unhandled exception occurred. TraceId: {TraceId}", traceId);
+        if (exception is not ValidationException)
+            logger.LogError(exception, "Unhandled exception. TraceId: {TraceId}", traceId);
 
         var (statusCode, errorCode, message) = exception switch
         {
+            ValidationException ve => (HttpStatusCode.BadRequest, "VALIDATION_ERROR",
+                string.Join("; ", ve.Errors.Select(e => e.ErrorMessage))),
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "UNAUTHORIZED", exception.Message),
             ConflictException => (HttpStatusCode.Conflict, "EMAIL_EXISTS", exception.Message),
             NotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND", exception.Message),
@@ -57,8 +49,6 @@ public class GlobalExceptionMiddleware
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)statusCode;
 
-        var json = JsonSerializer.Serialize(errorResponse);
-
-        return context.Response.WriteAsync(json);
+        return context.Response.WriteAsync(JsonSerializer.Serialize(errorResponse));
     }
 }

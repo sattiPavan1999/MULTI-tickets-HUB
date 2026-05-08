@@ -1,19 +1,22 @@
-import { useState, type FormEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
-import { validateEmail, validatePassword } from '@/utils/validation';
 import { ApiError } from '@/types/api';
+
+const schema = z.object({
+  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 interface SignInFormProps {
   onForgotPassword: () => void;
-}
-
-interface FormErrors {
-  email?: string;
-  password?: string;
 }
 
 export function SignInForm({ onForgotPassword }: SignInFormProps) {
@@ -21,56 +24,41 @@ export function SignInForm({ onForgotPassword }: SignInFormProps) {
   const { login } = useAuth();
   const toast = useToast();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-  const validate = (): FormErrors => ({
-    email: validateEmail(email),
-    password: validatePassword(password, 1),
-  });
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = validate();
-    setErrors(next);
-    if (Object.values(next).some(Boolean)) return;
-
-    setSubmitting(true);
+  async function onSubmit({ email, password }: FormValues) {
     try {
       const user = await login({ email: email.trim(), password });
       toast.success(`Welcome back, ${user.fullName.split(' ')[0]}!`);
       navigate('/dashboard', { replace: true });
     } catch (e) {
-      const message =
-        e instanceof ApiError ? e.message : 'Unable to sign in. Please try again.';
+      const message = e instanceof ApiError ? e.message : 'Unable to sign in. Please try again.';
       toast.error(message, 'Sign in failed');
-    } finally {
-      setSubmitting(false);
     }
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4 animate-fade-in">
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 animate-fade-in">
       <Input
+        {...register('email')}
         label="Email"
         type="email"
         autoComplete="email"
         placeholder="you@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        error={errors.email}
+        error={errors.email?.message}
         required
       />
       <Input
+        {...register('password')}
         label="Password"
         type="password"
         autoComplete="current-password"
         placeholder="Enter your password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        error={errors.password}
+        error={errors.password?.message}
         showPasswordToggle
         required
       />
@@ -83,7 +71,7 @@ export function SignInForm({ onForgotPassword }: SignInFormProps) {
           Forgot password?
         </button>
       </div>
-      <Button type="submit" size="lg" fullWidth isLoading={submitting}>
+      <Button type="submit" size="lg" fullWidth isLoading={isSubmitting}>
         Sign in
       </Button>
     </form>

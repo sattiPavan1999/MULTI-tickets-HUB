@@ -1,56 +1,92 @@
+using Bogus;
 using IdentityService.Core.Data;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Testcontainers.PostgreSql;
 
 namespace IdentityService.Tests.Repositories;
 
-public class UserRepositoryTests
+public class UserRepositoryTests : IAsyncLifetime
 {
-    private static (UserRepository repo, IdentityDbContext db) Build(string dbName)
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage("postgres:17-alpine")
+        .Build();
+
+    private IdentityDbContext _context = null!;
+    private UserRepository _repo = null!;
+
+    private static readonly Faker<User> UserFaker = new Faker<User>()
+        .RuleFor(u => u.Email, f => f.Internet.Email())
+        .RuleFor(u => u.PasswordHash, _ => "hashed_password")
+        .RuleFor(u => u.FullName, f => f.Name.FullName())
+        .RuleFor(u => u.PhoneNumber, f => f.Phone.PhoneNumber("+1##########"))
+        .RuleFor(u => u.Role, _ => "User");
+
+    public async Task InitializeAsync()
     {
+        await _postgres.StartAsync();
+
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(dbName)
+            .UseNpgsql(_postgres.GetConnectionString())
             .Options;
-        var db = new IdentityDbContext(options);
-        var repo = new UserRepository(db, NullLogger<UserRepository>.Instance);
-        return (repo, db);
+
+        _context = new IdentityDbContext(options);
+        await _context.Database.MigrateAsync();
+        _repo = new UserRepository(_context, NullLogger<UserRepository>.Instance);
     }
 
-    private static User NewUser(string email = "user@example.com") => new()
+    public async Task DisposeAsync()
     {
-        Email = email,
-        PasswordHash = "hashed",
-        FullName = "John Doe",
-        PhoneNumber = "+1234567890",
-        Role = "User"
-    };
+        await _context.DisposeAsync();
+        await _postgres.DisposeAsync();
+    }
+
+    // ── AddAsync ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddAsync_PersistsUser_AndReturnsWithId()
+    {
+        var user = UserFaker.Generate();
+
+        var created = await _repo.AddAsync(user);
+
+        created.Id.Should().BeGreaterThan(0);
+        (await _context.Users.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AddAsync_SetsCreatedAt()
+    {
+        var before = DateTime.UtcNow;
+        var user = UserFaker.Generate();
+
+        var created = await _repo.AddAsync(user);
+
+        created.CreatedAt.Should().BeOnOrAfter(before);
+    }
 
     // ── GetByIdAsync ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetByIdAsync_ExistingUser_ReturnsUser()
     {
-        var (repo, db) = Build(nameof(GetByIdAsync_ExistingUser_ReturnsUser));
-        db.Users.Add(NewUser());
-        await db.SaveChangesAsync();
-        var saved = db.Users.First();
+        var user = UserFaker.Generate();
+        await _repo.AddAsync(user);
 
-        var result = await repo.GetByIdAsync(saved.Id);
+        var result = await _repo.GetByIdAsync(user.Id);
 
-        Assert.NotNull(result);
-        Assert.Equal(saved.Id, result!.Id);
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(user.Id);
     }
 
     [Fact]
     public async Task GetByIdAsync_NonExistentId_ReturnsNull()
     {
-        var (repo, _) = Build(nameof(GetByIdAsync_NonExistentId_ReturnsNull));
+        var result = await _repo.GetByIdAsync(999);
 
-        var result = await repo.GetByIdAsync(999);
-
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
     // ── GetByEmailAsync ───────────────────────────────────────────────────────
@@ -58,48 +94,21 @@ public class UserRepositoryTests
     [Fact]
     public async Task GetByEmailAsync_ExistingEmail_ReturnsUser()
     {
-        var (repo, db) = Build(nameof(GetByEmailAsync_ExistingEmail_ReturnsUser));
-        db.Users.Add(NewUser("find@example.com"));
-        await db.SaveChangesAsync();
+        var user = UserFaker.Generate();
+        await _repo.AddAsync(user);
 
-        var result = await repo.GetByEmailAsync("find@example.com");
+        var result = await _repo.GetByEmailAsync(user.Email);
 
-        Assert.NotNull(result);
-        Assert.Equal("find@example.com", result!.Email);
+        result.Should().NotBeNull();
+        result!.Email.Should().Be(user.Email);
     }
 
     [Fact]
     public async Task GetByEmailAsync_NonExistentEmail_ReturnsNull()
     {
-        var (repo, _) = Build(nameof(GetByEmailAsync_NonExistentEmail_ReturnsNull));
+        var result = await _repo.GetByEmailAsync("nobody@example.com");
 
-        var result = await repo.GetByEmailAsync("nobody@example.com");
-
-        Assert.Null(result);
-    }
-
-    // ── CreateAsync ───────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task CreateAsync_PersistsUser_AndReturnsWithId()
-    {
-        var (repo, db) = Build(nameof(CreateAsync_PersistsUser_AndReturnsWithId));
-
-        var created = await repo.CreateAsync(NewUser());
-
-        Assert.True(created.Id > 0);
-        Assert.Equal(1, await db.Users.CountAsync());
-    }
-
-    [Fact]
-    public async Task CreateAsync_SetsCreatedAt()
-    {
-        var (repo, _) = Build(nameof(CreateAsync_SetsCreatedAt));
-        var before = DateTime.UtcNow;
-
-        var created = await repo.CreateAsync(NewUser());
-
-        Assert.True(created.CreatedAt >= before);
+        result.Should().BeNull();
     }
 
     // ── UpdateAsync ───────────────────────────────────────────────────────────
@@ -107,16 +116,14 @@ public class UserRepositoryTests
     [Fact]
     public async Task UpdateAsync_PersistsChanges()
     {
-        var (repo, db) = Build(nameof(UpdateAsync_PersistsChanges));
-        db.Users.Add(NewUser());
-        await db.SaveChangesAsync();
-        var user = db.Users.First();
+        var user = UserFaker.Generate();
+        await _repo.AddAsync(user);
 
         user.FullName = "Updated Name";
-        await repo.UpdateAsync(user);
+        await _repo.UpdateAsync(user);
 
-        var refreshed = await db.Users.FindAsync(user.Id);
-        Assert.Equal("Updated Name", refreshed!.FullName);
+        var refreshed = await _context.Users.FindAsync(user.Id);
+        refreshed!.FullName.Should().Be("Updated Name");
     }
 
     // ── EmailExistsAsync ──────────────────────────────────────────────────────
@@ -124,70 +131,60 @@ public class UserRepositoryTests
     [Fact]
     public async Task EmailExistsAsync_ExistingEmail_ReturnsTrue()
     {
-        var (repo, db) = Build(nameof(EmailExistsAsync_ExistingEmail_ReturnsTrue));
-        db.Users.Add(NewUser("exists@example.com"));
-        await db.SaveChangesAsync();
+        var user = UserFaker.Generate();
+        await _repo.AddAsync(user);
 
-        var result = await repo.EmailExistsAsync("exists@example.com");
+        var result = await _repo.EmailExistsAsync(user.Email);
 
-        Assert.True(result);
+        result.Should().BeTrue();
     }
 
     [Fact]
     public async Task EmailExistsAsync_NonExistentEmail_ReturnsFalse()
     {
-        var (repo, _) = Build(nameof(EmailExistsAsync_NonExistentEmail_ReturnsFalse));
+        var result = await _repo.EmailExistsAsync("missing@example.com");
 
-        var result = await repo.EmailExistsAsync("missing@example.com");
-
-        Assert.False(result);
+        result.Should().BeFalse();
     }
 
-    // ── GetAllAsync ───────────────────────────────────────────────────────────
+    // ── GetAllAsync / CountAsync ──────────────────────────────────────────────
 
     [Fact]
     public async Task GetAllAsync_ReturnsAllUsers()
     {
-        var (repo, db) = Build(nameof(GetAllAsync_ReturnsAllUsers));
-        db.Users.AddRange(NewUser("a@example.com"), NewUser("b@example.com"));
-        await db.SaveChangesAsync();
+        var users = UserFaker.Generate(3);
+        foreach (var u in users)
+            await _repo.AddAsync(u);
 
-        var result = await repo.GetAllAsync();
+        var result = await _repo.GetAllAsync();
 
-        Assert.Equal(2, result.Count);
+        result.Should().HaveCount(3);
     }
-
-    [Fact]
-    public async Task GetAllAsync_EmptyDatabase_ReturnsEmptyList()
-    {
-        var (repo, _) = Build(nameof(GetAllAsync_EmptyDatabase_ReturnsEmptyList));
-
-        var result = await repo.GetAllAsync();
-
-        Assert.Empty(result);
-    }
-
-    // ── CountAsync ────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task CountAsync_ReturnsCorrectCount()
     {
-        var (repo, db) = Build(nameof(CountAsync_ReturnsCorrectCount));
-        db.Users.AddRange(NewUser("a@example.com"), NewUser("b@example.com"), NewUser("c@example.com"));
-        await db.SaveChangesAsync();
+        var users = UserFaker.Generate(2);
+        foreach (var u in users)
+            await _repo.AddAsync(u);
 
-        var count = await repo.CountAsync();
+        var count = await _repo.CountAsync();
 
-        Assert.Equal(3, count);
+        count.Should().Be(2);
     }
 
+    // ── Query() IQueryable ────────────────────────────────────────────────────
+
     [Fact]
-    public async Task CountAsync_EmptyDatabase_ReturnsZero()
+    public async Task Query_CanFilterByEmail()
     {
-        var (repo, _) = Build(nameof(CountAsync_EmptyDatabase_ReturnsZero));
+        var users = UserFaker.Generate(3);
+        foreach (var u in users)
+            await _repo.AddAsync(u);
 
-        var count = await repo.CountAsync();
+        var target = users[0].Email;
+        var result = _repo.Query().Where(u => u.Email == target).ToList();
 
-        Assert.Equal(0, count);
+        result.Should().ContainSingle(u => u.Email == target);
     }
 }

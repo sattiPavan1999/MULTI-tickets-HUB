@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-.NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains + admin), plus a React frontend. **`admin-bff`, `movie-service`, and `train-service` have had their source intentionally stripped** (commit `368d3b8`) — only `Program.cs`, `*.csproj`, `appsettings*.json`, and `Dockerfile` survive. Those three services will not compile. When asked to work on them, treat the surviving `Program.cs` as the contract spec and reconstruct from it using `identity-service` as the canonical reference.
+.NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains + admin), plus a React frontend. **`admin-bff`, `movie-service`, and `train-service` have had their source intentionally stripped** (commit `368d3b8`) — only `Program.cs`, `*.csproj`, `appsettings*.json`, and `Dockerfile` survive. Those three services will not compile. When asked to work on them, treat the surviving `Program.cs` as the contract spec and reconstruct from it using `identity-service` as the canonical reference implementation.
 
 Only `identity-service`, `api-gateway`, and `ticket-hub-frontend` are fully implemented.
 
@@ -19,27 +19,34 @@ docker-compose up --build                                     # full stack
 docker-compose down -v                                        # also drops the postgres volume
 ```
 
-### .NET services (each has its own `.slnx`)
+### .NET services
+
+Each service has its own `.slnx` file. Build and test commands must target the `.csproj` directly (dotnet 8 does not support `.slnx` via `dotnet build`):
 
 ```bash
-dotnet build identity-service/identity_service/IdentityService.slnx
-dotnet build api-gateway/api_gateway/ApiGateway.slnx
+dotnet build identity-service/identity_service/Src/IdentityService.Endpoints/IdentityService.Endpoints.csproj
+dotnet build api-gateway/api_gateway/Src/ApiGateway/ApiGateway.csproj
 
-dotnet test identity-service/identity_service/IdentityService.slnx
-dotnet test api-gateway/api_gateway/ApiGateway.slnx
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj
+dotnet test api-gateway/api_gateway/Tests/ApiGateway.Tests/ApiGateway.Tests.csproj
 
-# Filter to a single test class or name pattern
-dotnet test identity-service/identity_service/IdentityService.slnx --filter "FullyQualifiedName~AuthServiceTests"
-dotnet test identity-service/identity_service/IdentityService.slnx --filter "DisplayName~Login"
+# Filter to a single class or name pattern
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
+  --filter "FullyQualifiedName~AuthServiceTests"
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
+  --filter "DisplayName~Login"
+
+# Skip Testcontainer tests that require Docker
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
+  --filter "FullyQualifiedName!~RepositoryTests"
 
 # Run locally without Docker (needs Postgres on 5435 + .env vars exported)
 dotnet run --project identity-service/identity_service/Src/IdentityService.Endpoints
 ```
 
-### EF Core migrations (identity-service only)
+### EF Core migrations (identity-service only, run from `identity-service/identity_service/`)
 
 ```bash
-# Run from identity-service/identity_service/
 dotnet ef migrations add <Name> \
   --project Src/IdentityService.Core \
   --startup-project Src/IdentityService.Endpoints
@@ -48,7 +55,7 @@ dotnet ef database update \
   --startup-project Src/IdentityService.Endpoints
 ```
 
-Migrations also apply automatically at startup via `dbContext.Database.Migrate()`.
+Migrations also run automatically at startup via `dbContext.Database.Migrate()`.
 
 ### Frontend
 
@@ -57,7 +64,7 @@ cd ticket-hub-frontend
 cp .env.example .env   # sets VITE_API_URL=http://localhost:5000
 npm install
 npm run dev            # http://localhost:5173
-npm run lint           # tsc type-check only
+npm run lint           # tsc type-check only (no ESLint)
 npm test               # vitest run (single pass)
 npm run test:watch     # vitest watch mode
 ```
@@ -95,7 +102,7 @@ The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000
 ### GraphQL + REST split
 
 Convention across all services: **GraphQL (HotChocolate 13.9.14) handles reads; writes go through REST controllers**.
-- Reads → `GraphQL/Query.cs`
+- Reads → `GraphQL/Query.cs` — use `[UseFiltering]` and `[UseSorting]` on list queries that return `IQueryable<T>` from the repository's `Query()` method.
 - Writes → `[ApiController]` actions under `Controllers/`
 
 All GraphQL queries in identity-service require `[Authorize]`.
@@ -105,18 +112,52 @@ All GraphQL queries in identity-service require `[Authorize]`.
 ```
 <service>/<service>_service/
   Src/
-    <Service>.Core/       Models, DTOs, Data (DbContext + Migrations), Repositories, Services, Exceptions
-    <Service>.Endpoints/  Program.cs, Controllers, GraphQL/Query.cs, Middleware, appsettings
+    <Service>.Core/
+      Data/              DbContext + Migrations (schema: "identity")
+      DTOs/              Plain request/response types — no validation annotations
+      Exceptions/        ConflictException (409), NotFoundException (404)
+      Extensions/        CoreServiceExtensions.AddCoreServices() — all DI wired here
+      Mapping/           AutoMapper profiles (User → UserType)
+      Models/            EF Core entities
+      Repositories/      IBaseRepository<T>, BaseRepository<T>, domain-specific interfaces
+      Services/          IAuthService (facade) + 3 sub-services + IJwtService + IAuditService
+      Validators/        FluentValidation AbstractValidator<T> — one per input DTO
+    <Service>.Endpoints/
+      Controllers/       REST endpoints — thin, delegate to IAuthService
+      GraphQL/Query.cs   HotChocolate queries
+      Middleware/        GlobalExceptionMiddleware, CorrelationIdMiddleware
+      Program.cs         Calls builder.Services.AddCoreServices(config) then wires JWT/GraphQL/CORS
   Tests/
-    <Service>.Tests/      xUnit + Moq + EF InMemory; organised as Controllers/, GraphQL/, Middleware/, Models/, Repositories/, Services/
+    <Service>.Tests/     xUnit + Moq + FluentAssertions + Bogus
+      Controllers/       Moq IAuthService; pass CancellationToken.None explicitly
+      GraphQL/           Moq IAuthService + IUserRepository
+      Middleware/
+      Models/            FluentValidation TestHelper (TestValidate / ShouldHaveValidationErrorFor)
+      Repositories/      Testcontainers PostgreSQL — requires Docker at test time
+      Services/          EF InMemory for workflow tests; Moq for unit tests; Bogus for test data
 ```
 
-DI registration order in `Program.cs` (use identity-service as the template):
-`DbContext → Repositories → Services → JWT auth → GraphQL → CORS → migrations on startup`
+### DI registration pattern
 
-### Custom exceptions (identity-service)
+`Program.cs` calls a single extension method that owns all Core registrations:
 
-`IdentityService.Core/Exceptions/` contains `ConflictException` (→ HTTP 409) and `NotFoundException` (→ HTTP 404). `GlobalExceptionMiddleware` pattern-matches on these types — never use string-matching `InvalidOperationException` for known error cases.
+```csharp
+builder.Services.AddCoreServices(builder.Configuration);
+// wires: DbContext, Repositories, sub-services, AuthService (facade), JwtService,
+//        AuditService, FluentValidation validators, AutoMapper
+```
+
+The sub-service Facade pattern for `IAuthService`:
+- `IAuthService` (public contract used by controllers and GraphQL) is implemented by `AuthService`, which delegates to:
+  - `IAuthenticationService` — Register, Login
+  - `IUserAccountService` — UpdateProfile, GetUserById, GetAllUsers, GetUserCount
+  - `IPasswordService` — ForgotPassword, ResetPassword
+
+### Validation and error handling
+
+- **Input validation** — FluentValidation validators (in `Core/Validators/`) are injected into sub-services and called with `ValidateAndThrowAsync`. DTOs carry no annotation-based constraints.
+- `GlobalExceptionMiddleware` maps: `ValidationException` → 400 `VALIDATION_ERROR`, `ConflictException` → 409 `EMAIL_EXISTS`, `NotFoundException` → 404 `NOT_FOUND`, `UnauthorizedAccessException` → 401 `UNAUTHORIZED`.
+- Never throw `InvalidOperationException` for expected domain errors — use `ConflictException` or `NotFoundException`.
 
 ### Cross-service auth
 
@@ -126,19 +167,26 @@ JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `ide
 
 `ticket-hub-frontend/src/`:
 - **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage`), `ToastContext`
-- **`services/api/client.ts`** — Axios instance pointing at `VITE_API_URL`; request interceptor injects Bearer token; response interceptor clears storage and redirects to `/auth` on 401
+- **`services/api/client.ts`** — Axios instance; request interceptor injects Bearer token; response interceptor clears storage and redirects to `/auth` on 401
+- **`services/graphql/apolloClient.ts`** — Apollo Client v4 instance; `authLink` injects Bearer token; wraps the app via `ApolloProvider` in `App.tsx`
 - **`routes/`** — `ProtectedRoute` (redirects unauthenticated to `/auth`), `PublicOnlyRoute` (redirects authenticated to `/dashboard`)
 - **`pages/`** — `AuthPage` (sign-in / sign-up / forgot-password in one view), `DashboardPage`, `ProfilePage`, `ResetPasswordPage`, `PlaceholderServicePage`
+
+All forms (auth and profile) use **React Hook Form** with **Zod** schemas via `zodResolver`. Each form file contains its own co-located `z.object({...})` schema — do not reach for `utils/validation.ts` (removed). The `Input` component uses `forwardRef`, so `{...register('fieldName')}` spreads directly onto it.
 
 `ForgotPasswordResponse.ResetToken` is only echoed back in Development; the frontend captures it from the API response and forwards it to `/reset-password?token=...` as a dev convenience.
 
 ### Frontend test setup
 
-Uses **Vitest + React Testing Library**. Test files live under `src/__tests__/` mirroring the source tree (`components/auth/`, `pages/`, `routes/`). Shared helpers in `src/test/`:
+Uses **Vitest + React Testing Library**. Test files are **co-located** next to their source files (e.g., `SignInForm.test.tsx` beside `SignInForm.tsx`). Shared helpers in `src/test/`:
 - `setup.ts` — imports `@testing-library/jest-dom`
-- `utils.tsx` — exports `TestRouter` (a `MemoryRouter` with React Router v7 future flags set to suppress deprecation warnings)
+- `utils.tsx` — exports `TestRouter` (a `MemoryRouter` with React Router v7 future flags)
 
 Mocking pattern: `vi.hoisted(() => vi.fn())` for functions referenced inside `vi.mock` factories.
+
+## Feature implementation reference
+
+When implementing any new feature — entity, repository, service, endpoint, GraphQL query, or frontend component — always consult `dotnet-architecture-reference.md` at the repo root first. It is the authoritative blueprint for this codebase and defines the exact patterns to follow: layered project structure, Repository/Facade/Strategy patterns, FluentValidation setup, AutoMapper profiles, DI registration via extension methods, HotChocolate GraphQL conventions, Testcontainers integration tests, Bogus test data, and React Hook Form + Zod frontend forms.
 
 ## Workflow rules
 

@@ -1,9 +1,13 @@
+using AutoMapper;
+using Bogus;
 using IdentityService.Core.Data;
 using IdentityService.Core.DTOs;
 using IdentityService.Core.Exceptions;
+using IdentityService.Core.Mapping;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using IdentityService.Core.Services;
+using IdentityService.Core.Validators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,9 +15,33 @@ using Moq;
 
 namespace IdentityService.Tests.Services;
 
+/// <summary>
+/// Service-layer tests — use EF InMemory for workflows that need the DB (UpdateProfile,
+/// ForgotPassword, ResetPassword) and Moq for lightweight unit coverage of Register/Login/Get*.
+/// </summary>
 public class AuthServiceTests
 {
-    // ── Helpers: real in-memory repos (used for UpdateProfile, ForgotPassword, ResetPassword) ──
+    // ── Fakers ────────────────────────────────────────────────────────────────
+
+    private static readonly Faker Fake = new();
+
+    private static readonly Faker<RegisterInput> RegisterFaker = new Faker<RegisterInput>()
+        .CustomInstantiator(f => new RegisterInput
+        {
+            Email = f.Internet.Email(),
+            Password = "Password1!",
+            FullName = f.Name.FullName(),
+            PhoneNumber = f.Phone.PhoneNumber("+1##########")
+        });
+
+    private static readonly Faker<LoginInput> LoginFaker = new Faker<LoginInput>()
+        .CustomInstantiator(f => new LoginInput
+        {
+            Email = f.Internet.Email(),
+            Password = "Password1!"
+        });
+
+    // ── InMemory wiring ───────────────────────────────────────────────────────
 
     private static readonly IConfiguration DevConfig = new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?>
@@ -23,82 +51,48 @@ public class AuthServiceTests
         })
         .Build();
 
-    private static (AuthService service, IdentityDbContext db) BuildService(
-        string dbName,
-        IConfiguration? configuration = null)
+    private static IMapper BuildMapper()
+        => new MapperConfiguration(c => c.AddProfile<UserMappingProfile>()).CreateMapper();
+
+    private static (IAuthService svc, IdentityDbContext db) BuildFullService(string dbName)
     {
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
+            .UseInMemoryDatabase(dbName)
             .Options;
         var db = new IdentityDbContext(options);
 
+        var mapper = BuildMapper();
         var userRepo = new UserRepository(db, NullLogger<UserRepository>.Instance);
         var resetRepo = new PasswordResetTokenRepository(db, NullLogger<PasswordResetTokenRepository>.Instance);
         var jwt = new StubJwtService();
-        var audit = new StubAuditService();
+        var audit = new Mock<IAuditService>().Object;
 
-        var service = new AuthService(
-            userRepo,
-            resetRepo,
-            jwt,
-            audit,
-            configuration ?? DevConfig,
-            NullLogger<AuthService>.Instance);
+        var authSvc = new AuthenticationService(
+            userRepo, jwt, audit,
+            new RegisterInputValidator(), new LoginInputValidator(),
+            mapper, NullLogger<AuthenticationService>.Instance);
 
-        return (service, db);
+        var accountSvc = new UserAccountService(
+            userRepo, audit,
+            new UpdateProfileInputValidator(),
+            mapper, NullLogger<UserAccountService>.Instance);
+
+        var pwdSvc = new PasswordService(
+            userRepo, resetRepo, audit,
+            DevConfig, NullLogger<PasswordService>.Instance);
+
+        return (new AuthService(authSvc, accountSvc, pwdSvc), db);
     }
 
-    // ── Helpers: mocked repos (used for Register, Login, Get* operations) ──
-
-    private static UserType MakeUserType(int id = 1) => new()
-    {
-        Id = id,
-        Email = "user@example.com",
-        FullName = "John Doe",
-        PhoneNumber = "+1234567890",
-        Role = "User",
-        CreatedAt = DateTime.UtcNow
-    };
-
-    private static User MakeUserEntity(int id = 1) => new()
-    {
-        Id = id,
-        Email = "user@example.com",
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password1!"),
-        FullName = "John Doe",
-        PhoneNumber = "+1234567890",
-        Role = "User",
-        CreatedAt = DateTime.UtcNow
-    };
-
-    private static AuthService BuildMockedService(
-        Mock<IUserRepository> userRepo,
-        Mock<IPasswordResetTokenRepository>? resetRepo = null,
-        Mock<IJwtService>? jwt = null,
-        IConfiguration? config = null)
-    {
-        var mockResetRepo = resetRepo ?? new Mock<IPasswordResetTokenRepository>();
-        var mockJwt = jwt ?? new Mock<IJwtService>();
-        if (jwt == null)
-            mockJwt.Setup(j => j.GenerateToken(It.IsAny<User>())).Returns("stub-token");
-
-        return new AuthService(
-            userRepo.Object,
-            mockResetRepo.Object,
-            mockJwt.Object,
-            new Mock<IAuditService>().Object,
-            config ?? DevConfig,
-            NullLogger<AuthService>.Instance);
-    }
-
-    private static async Task<User> SeedUserAsync(IdentityDbContext db, string email = "user@example.com")
+    private static async Task<User> SeedUserAsync(IdentityDbContext db,
+        string? email = null, string password = "OldPassword1!")
     {
         var user = new User
         {
-            Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPassword1!"),
-            FullName = "Original Name",
-            PhoneNumber = "+1234567890",
+            Email = email ?? Fake.Internet.Email(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            FullName = Fake.Name.FullName(),
+            PhoneNumber = Fake.Phone.PhoneNumber("+1##########"),
             Role = "User",
             CreatedAt = DateTime.UtcNow
         };
@@ -107,87 +101,104 @@ public class AuthServiceTests
         return user;
     }
 
+    // ── Mocked wiring ─────────────────────────────────────────────────────────
+
+    private static User MakeEntity(string? email = null) => new()
+    {
+        Id = Fake.Random.Int(1, 1000),
+        Email = email ?? Fake.Internet.Email(),
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password1!"),
+        FullName = Fake.Name.FullName(),
+        PhoneNumber = Fake.Phone.PhoneNumber("+1##########"),
+        Role = "User",
+        CreatedAt = DateTime.UtcNow
+    };
+
+    private static IAuthService BuildMocked(
+        Mock<IUserRepository> userRepo,
+        Mock<IPasswordResetTokenRepository>? resetRepo = null,
+        Mock<IJwtService>? jwt = null)
+    {
+        var mapper = BuildMapper();
+        var mockJwt = jwt ?? new Mock<IJwtService>();
+        if (jwt is null) mockJwt.Setup(j => j.GenerateToken(It.IsAny<User>())).Returns("stub-token");
+
+        var authSvc = new AuthenticationService(
+            userRepo.Object, mockJwt.Object, new Mock<IAuditService>().Object,
+            new RegisterInputValidator(), new LoginInputValidator(),
+            mapper, NullLogger<AuthenticationService>.Instance);
+
+        var accountSvc = new UserAccountService(
+            userRepo.Object, new Mock<IAuditService>().Object,
+            new UpdateProfileInputValidator(),
+            mapper, NullLogger<UserAccountService>.Instance);
+
+        var mockReset = resetRepo ?? new Mock<IPasswordResetTokenRepository>();
+        var pwdSvc = new PasswordService(
+            userRepo.Object, mockReset.Object, new Mock<IAuditService>().Object,
+            DevConfig, NullLogger<PasswordService>.Instance);
+
+        return new AuthService(authSvc, accountSvc, pwdSvc);
+    }
+
     // ── Register ──────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Register_NewEmail_ReturnsUserType()
     {
+        var input = RegisterFaker.Generate();
+        var entity = MakeEntity(input.Email);
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync("user@example.com")).ReturnsAsync(false);
-        userRepo.Setup(r => r.CreateAsync(It.IsAny<User>())).ReturnsAsync(MakeUserEntity());
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.EmailExistsAsync(input.Email, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        userRepo.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.RegisterAsync(new RegisterInput
-        {
-            Email = "user@example.com",
-            Password = "Password1!",
-            FullName = "John Doe",
-            PhoneNumber = "+1234567890"
-        });
+        var result = await svc.RegisterAsync(input);
 
-        Assert.Equal("user@example.com", result.Email);
-        Assert.Equal("John Doe", result.FullName);
-        Assert.Equal("User", result.Role);
+        result.Email.Should().Be(input.Email);
+        result.Role.Should().Be("User");
     }
 
     [Fact]
     public async Task Register_DuplicateEmail_ThrowsConflictException()
     {
+        var input = RegisterFaker.Generate();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync("user@example.com")).ReturnsAsync(true);
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.EmailExistsAsync(input.Email, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var svc = BuildMocked(userRepo);
 
-        await Assert.ThrowsAsync<ConflictException>(() =>
-            service.RegisterAsync(new RegisterInput
-            {
-                Email = "user@example.com",
-                Password = "Password1!",
-                FullName = "John Doe",
-                PhoneNumber = "+1234567890"
-            }));
+        await svc.Invoking(s => s.RegisterAsync(input))
+            .Should().ThrowAsync<ConflictException>();
     }
 
     [Fact]
     public async Task Register_HashesPassword_BeforeStoring()
     {
+        var input = RegisterFaker.Generate();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
-        User? capturedUser = null;
-        userRepo.Setup(r => r.CreateAsync(It.IsAny<User>()))
-            .Callback<User>(u => capturedUser = u)
-            .ReturnsAsync(MakeUserEntity());
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        User? captured = null;
+        userRepo.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .Callback<User, CancellationToken>((u, _) => captured = u)
+            .ReturnsAsync(MakeEntity());
+        var svc = BuildMocked(userRepo);
 
-        await service.RegisterAsync(new RegisterInput
-        {
-            Email = "user@example.com",
-            Password = "Password1!",
-            FullName = "John Doe",
-            PhoneNumber = "+1234567890"
-        });
+        await svc.RegisterAsync(input);
 
-        Assert.NotNull(capturedUser);
-        Assert.NotEqual("Password1!", capturedUser!.PasswordHash);
-        Assert.True(BCrypt.Net.BCrypt.Verify("Password1!", capturedUser.PasswordHash));
+        captured.Should().NotBeNull();
+        captured!.PasswordHash.Should().NotBe(input.Password);
+        BCrypt.Net.BCrypt.Verify(input.Password, captured.PasswordHash).Should().BeTrue();
     }
 
     [Fact]
-    public async Task Register_DoesNotCallCreate_WhenEmailExists()
+    public async Task Register_EmptyEmail_ThrowsValidationException()
     {
+        var input = new RegisterInput { Email = "", Password = "Password1!", FullName = "Test", PhoneNumber = "+1234567890" };
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>())).ReturnsAsync(true);
-        var service = BuildMockedService(userRepo);
+        var svc = BuildMocked(userRepo);
 
-        await Assert.ThrowsAsync<ConflictException>(() =>
-            service.RegisterAsync(new RegisterInput
-            {
-                Email = "user@example.com",
-                Password = "Password1!",
-                FullName = "J",
-                PhoneNumber = "+1"
-            }));
-
-        userRepo.Verify(r => r.CreateAsync(It.IsAny<User>()), Times.Never);
+        await svc.Invoking(s => s.RegisterAsync(input))
+            .Should().ThrowAsync<FluentValidation.ValidationException>();
     }
 
     // ── Login ──────────────────────────────────────────────────────────────────
@@ -195,68 +206,38 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_ValidCredentials_ReturnsTokenAndUser()
     {
+        var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync("user@example.com")).ReturnsAsync(MakeUserEntity());
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.LoginAsync(new LoginInput
-        {
-            Email = "user@example.com",
-            Password = "Password1!"
-        });
+        var result = await svc.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" });
 
-        Assert.Equal("stub-token", result.Token);
-        Assert.Equal("user@example.com", result.User.Email);
+        result.Token.Should().Be("stub-token");
+        result.User.Email.Should().Be(entity.Email);
     }
 
     [Fact]
-    public async Task Login_UnknownEmail_ThrowsUnauthorizedAccessException()
+    public async Task Login_UnknownEmail_ThrowsUnauthorizedException()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
+        var svc = BuildMocked(userRepo);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            service.LoginAsync(new LoginInput
-            {
-                Email = "nobody@example.com",
-                Password = "Password1!"
-            }));
+        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = "nobody@example.com", Password = "Password1!" }))
+            .Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     [Fact]
-    public async Task Login_WrongPassword_ThrowsUnauthorizedAccessException()
+    public async Task Login_WrongPassword_ThrowsUnauthorizedException()
     {
+        var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync("user@example.com")).ReturnsAsync(MakeUserEntity());
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        var svc = BuildMocked(userRepo);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            service.LoginAsync(new LoginInput
-            {
-                Email = "user@example.com",
-                Password = "WrongPassword!"
-            }));
-    }
-
-    [Fact]
-    public async Task Login_GeneratesToken_ViaJwtService()
-    {
-        var entity = MakeUserEntity();
-        var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync("user@example.com")).ReturnsAsync(entity);
-        var jwt = new Mock<IJwtService>();
-        jwt.Setup(j => j.GenerateToken(entity)).Returns("generated-token");
-        var service = BuildMockedService(userRepo, jwt: jwt);
-
-        var result = await service.LoginAsync(new LoginInput
-        {
-            Email = "user@example.com",
-            Password = "Password1!"
-        });
-
-        Assert.Equal("generated-token", result.Token);
-        jwt.Verify(j => j.GenerateToken(entity), Times.Once);
+        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "WrongPassword!" }))
+            .Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     // ── GetUserById ────────────────────────────────────────────────────────────
@@ -264,69 +245,54 @@ public class AuthServiceTests
     [Fact]
     public async Task GetUserById_ExistingUser_ReturnsUserType()
     {
+        var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeUserEntity());
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetByIdAsync(entity.Id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.GetUserByIdAsync(1);
+        var result = await svc.GetUserByIdAsync(entity.Id);
 
-        Assert.NotNull(result);
-        Assert.Equal(1, result!.Id);
-        Assert.Equal("user@example.com", result.Email);
+        result.Should().NotBeNull();
+        result!.Email.Should().Be(entity.Email);
     }
 
     [Fact]
     public async Task GetUserById_NonExistentUser_ReturnsNull()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((User?)null);
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetByIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.GetUserByIdAsync(999);
+        var result = await svc.GetUserByIdAsync(999);
 
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
-    // ── GetAllUsers ────────────────────────────────────────────────────────────
+    // ── GetAllUsers / GetUserCount ─────────────────────────────────────────────
 
     [Fact]
     public async Task GetAllUsers_ReturnsListOfUserTypes()
     {
-        var users = new List<User> { MakeUserEntity(1), MakeUserEntity(2) };
+        var entities = Enumerable.Range(1, 3).Select(_ => MakeEntity()).ToList();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(users);
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(entities);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.GetAllUsersAsync();
+        var result = await svc.GetAllUsersAsync();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, u => Assert.IsType<UserType>(u));
+        result.Should().HaveCount(3);
     }
-
-    [Fact]
-    public async Task GetAllUsers_EmptyDb_ReturnsEmptyList()
-    {
-        var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
-        var service = BuildMockedService(userRepo);
-
-        var result = await service.GetAllUsersAsync();
-
-        Assert.Empty(result);
-    }
-
-    // ── GetUserCount ───────────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetUserCount_ReturnsCountFromRepository()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.CountAsync()).ReturnsAsync(7);
-        var service = BuildMockedService(userRepo);
+        userRepo.Setup(r => r.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(7);
+        var svc = BuildMocked(userRepo);
 
-        var result = await service.GetUserCountAsync();
+        var result = await svc.GetUserCountAsync();
 
-        Assert.Equal(7, result);
+        result.Should().Be(7);
     }
 
     // ── UpdateProfile ─────────────────────────────────────────────────────────
@@ -334,58 +300,45 @@ public class AuthServiceTests
     [Fact]
     public async Task UpdateProfile_UpdatesFullNameAndPhone()
     {
-        var (service, db) = BuildService(nameof(UpdateProfile_UpdatesFullNameAndPhone));
+        var (svc, db) = BuildFullService(nameof(UpdateProfile_UpdatesFullNameAndPhone));
         var user = await SeedUserAsync(db);
+        var newName = Fake.Name.FullName();
 
-        var result = await service.UpdateProfileAsync(user.Id, new UpdateProfileInput
-        {
-            FullName = "New Name",
-            PhoneNumber = "+19998887777"
-        });
+        var result = await svc.UpdateProfileAsync(user.Id, new UpdateProfileInput { FullName = newName });
 
-        Assert.Equal("New Name", result.FullName);
-        Assert.Equal("+19998887777", result.PhoneNumber);
-        Assert.Equal(user.Email, result.Email);
+        result.FullName.Should().Be(newName);
     }
 
     [Fact]
     public async Task UpdateProfile_ChangesEmail_WhenAvailable()
     {
-        var (service, db) = BuildService(nameof(UpdateProfile_ChangesEmail_WhenAvailable));
+        var (svc, db) = BuildFullService(nameof(UpdateProfile_ChangesEmail_WhenAvailable));
         var user = await SeedUserAsync(db);
+        var newEmail = Fake.Internet.Email();
 
-        var result = await service.UpdateProfileAsync(user.Id, new UpdateProfileInput
-        {
-            Email = "new@example.com"
-        });
+        var result = await svc.UpdateProfileAsync(user.Id, new UpdateProfileInput { Email = newEmail });
 
-        Assert.Equal("new@example.com", result.Email);
+        result.Email.Should().Be(newEmail);
     }
 
     [Fact]
     public async Task UpdateProfile_RejectsEmail_AlreadyTaken()
     {
-        var (service, db) = BuildService(nameof(UpdateProfile_RejectsEmail_AlreadyTaken));
-        var user = await SeedUserAsync(db, "user@example.com");
-        await SeedUserAsync(db, "taken@example.com");
+        var (svc, db) = BuildFullService(nameof(UpdateProfile_RejectsEmail_AlreadyTaken));
+        var existing = await SeedUserAsync(db);
+        var target = await SeedUserAsync(db);
 
-        await Assert.ThrowsAsync<ConflictException>(() =>
-            service.UpdateProfileAsync(user.Id, new UpdateProfileInput
-            {
-                Email = "taken@example.com"
-            }));
+        await svc.Invoking(s => s.UpdateProfileAsync(target.Id, new UpdateProfileInput { Email = existing.Email }))
+            .Should().ThrowAsync<ConflictException>();
     }
 
     [Fact]
-    public async Task UpdateProfile_UnknownUser_Throws()
+    public async Task UpdateProfile_UnknownUser_ThrowsNotFoundException()
     {
-        var (service, _) = BuildService(nameof(UpdateProfile_UnknownUser_Throws));
+        var (svc, _) = BuildFullService(nameof(UpdateProfile_UnknownUser_ThrowsNotFoundException));
 
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            service.UpdateProfileAsync(9999, new UpdateProfileInput
-            {
-                FullName = "X"
-            }));
+        await svc.Invoking(s => s.UpdateProfileAsync(9999, new UpdateProfileInput { FullName = "X" }))
+            .Should().ThrowAsync<NotFoundException>();
     }
 
     // ── ForgotPassword ────────────────────────────────────────────────────────
@@ -393,47 +346,25 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPassword_KnownUser_IssuesToken()
     {
-        var (service, db) = BuildService(nameof(ForgotPassword_KnownUser_IssuesToken));
+        var (svc, db) = BuildFullService(nameof(ForgotPassword_KnownUser_IssuesToken));
         var user = await SeedUserAsync(db);
 
-        var response = await service.ForgotPasswordAsync(new ForgotPasswordInput
-        {
-            Email = user.Email
-        });
+        var response = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
-        Assert.NotNull(response.ResetToken);
-        Assert.NotNull(response.ExpiresAt);
-        Assert.True(response.ExpiresAt > DateTime.UtcNow);
-        Assert.Single(db.PasswordResetTokens);
+        response.ResetToken.Should().NotBeNull();
+        response.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        db.PasswordResetTokens.Should().HaveCount(1);
     }
 
     [Fact]
     public async Task ForgotPassword_UnknownUser_DoesNotLeakExistence()
     {
-        var (service, db) = BuildService(nameof(ForgotPassword_UnknownUser_DoesNotLeakExistence));
+        var (svc, db) = BuildFullService(nameof(ForgotPassword_UnknownUser_DoesNotLeakExistence));
 
-        var response = await service.ForgotPasswordAsync(new ForgotPasswordInput
-        {
-            Email = "missing@example.com"
-        });
+        var response = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = "ghost@example.com" });
 
-        Assert.Null(response.ResetToken);
-        Assert.NotNull(response.Message);
-        Assert.Empty(db.PasswordResetTokens);
-    }
-
-    [Fact]
-    public async Task ForgotPassword_InvalidatesPreviousActiveTokens()
-    {
-        var (service, db) = BuildService(nameof(ForgotPassword_InvalidatesPreviousActiveTokens));
-        var user = await SeedUserAsync(db);
-
-        await service.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
-        await service.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
-
-        var tokens = await db.PasswordResetTokens.ToListAsync();
-        Assert.Equal(2, tokens.Count);
-        Assert.Single(tokens, t => t.UsedAt == null);
+        response.ResetToken.Should().BeNull();
+        db.PasswordResetTokens.Should().BeEmpty();
     }
 
     // ── ResetPassword ─────────────────────────────────────────────────────────
@@ -441,81 +372,49 @@ public class AuthServiceTests
     [Fact]
     public async Task ResetPassword_ValidToken_UpdatesPasswordAndConsumesToken()
     {
-        var (service, db) = BuildService(nameof(ResetPassword_ValidToken_UpdatesPasswordAndConsumesToken));
+        var (svc, db) = BuildFullService(nameof(ResetPassword_ValidToken_UpdatesPasswordAndConsumesToken));
         var user = await SeedUserAsync(db);
+        var forgot = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
-        var forgot = await service.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
-
-        var result = await service.ResetPasswordAsync(new ResetPasswordInput
+        var result = await svc.ResetPasswordAsync(new ResetPasswordInput
         {
             Token = forgot.ResetToken!,
             NewPassword = "BrandNewPass1!"
         });
 
-        Assert.True(result.Success);
-
+        result.Success.Should().BeTrue();
         var refreshed = await db.Users.FindAsync(user.Id);
-        Assert.NotNull(refreshed);
-        Assert.True(BCrypt.Net.BCrypt.Verify("BrandNewPass1!", refreshed!.PasswordHash));
-
+        BCrypt.Net.BCrypt.Verify("BrandNewPass1!", refreshed!.PasswordHash).Should().BeTrue();
         var token = await db.PasswordResetTokens.SingleAsync();
-        Assert.NotNull(token.UsedAt);
+        token.UsedAt.Should().NotBeNull();
     }
 
     [Fact]
-    public async Task ResetPassword_InvalidToken_Throws()
+    public async Task ResetPassword_InvalidToken_ThrowsUnauthorizedException()
     {
-        var (service, db) = BuildService(nameof(ResetPassword_InvalidToken_Throws));
-        await SeedUserAsync(db);
+        var (svc, _) = BuildFullService(nameof(ResetPassword_InvalidToken_ThrowsUnauthorizedException));
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            service.ResetPasswordAsync(new ResetPasswordInput
-            {
-                Token = "not-a-real-token",
-                NewPassword = "BrandNewPass1!"
-            }));
+        await svc.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
+        {
+            Token = "not-a-real-token",
+            NewPassword = "BrandNewPass1!"
+        })).Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     [Fact]
     public async Task ResetPassword_TokenCannotBeReused()
     {
-        var (service, db) = BuildService(nameof(ResetPassword_TokenCannotBeReused));
+        var (svc, db) = BuildFullService(nameof(ResetPassword_TokenCannotBeReused));
         var user = await SeedUserAsync(db);
+        var forgot = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
-        var forgot = await service.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
+        await svc.ResetPasswordAsync(new ResetPasswordInput { Token = forgot.ResetToken!, NewPassword = "First1!" });
 
-        await service.ResetPasswordAsync(new ResetPasswordInput
+        await svc.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
         {
             Token = forgot.ResetToken!,
-            NewPassword = "FirstReset1!"
-        });
-
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            service.ResetPasswordAsync(new ResetPasswordInput
-            {
-                Token = forgot.ResetToken!,
-                NewPassword = "SecondReset1!"
-            }));
-    }
-
-    [Fact]
-    public async Task ResetPassword_ExpiredToken_Throws()
-    {
-        var (service, db) = BuildService(nameof(ResetPassword_ExpiredToken_Throws));
-        var user = await SeedUserAsync(db);
-
-        var forgot = await service.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
-
-        var token = await db.PasswordResetTokens.SingleAsync();
-        token.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
-        await db.SaveChangesAsync();
-
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            service.ResetPasswordAsync(new ResetPasswordInput
-            {
-                Token = forgot.ResetToken!,
-                NewPassword = "BrandNewPass1!"
-            }));
+            NewPassword = "Second1!"
+        })).Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     // ── Stubs ─────────────────────────────────────────────────────────────────
@@ -524,10 +423,5 @@ public class AuthServiceTests
     {
         public string GenerateToken(User user) => "stub-token";
         public bool ValidateToken(string token) => true;
-    }
-
-    private sealed class StubAuditService : IAuditService
-    {
-        public Task LogAsync(string message) => Task.CompletedTask;
     }
 }

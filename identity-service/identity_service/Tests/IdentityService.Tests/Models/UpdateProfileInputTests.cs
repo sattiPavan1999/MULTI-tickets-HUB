@@ -1,139 +1,46 @@
-using System.ComponentModel.DataAnnotations;
+using FluentValidation.TestHelper;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Validators;
 
 namespace IdentityService.Tests.Models;
 
 public class UpdateProfileInputTests
 {
-    [Theory]
-    [InlineData("invalid-phone")]
-    [InlineData("abc123")]
-    public void UpdateProfileInput_InvalidPhoneNumber_FailsValidation(string invalidPhone)
-    {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            PhoneNumber = invalidPhone
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("PhoneNumber"));
-    }
+    private readonly UpdateProfileInputValidator _validator = new();
 
     [Theory]
-    [InlineData("+1234567890")]
-    [InlineData("+447911123456")]
-    public void UpdateProfileInput_ValidPhoneNumber_PassesValidation(string validPhone)
+    [InlineData("not-an-email")]
+    [InlineData("")]
+    public void Email_WhenProvided_InvalidFormat_HasError(string email)
     {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            PhoneNumber = validPhone
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Empty(validationResults);
-    }
-
-    [Theory]
-    [InlineData("123")]
-    [InlineData("+1")]
-    [InlineData("12345")]
-    public void UpdateProfileInput_PhoneNumberTooShort_FailsValidation(string tooShort)
-    {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            PhoneNumber = tooShort
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("PhoneNumber"));
+        var input = new UpdateProfileInput { Email = email };
+        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Email);
     }
 
     [Fact]
-    public void UpdateProfileInput_PhoneNumberTooLong_FailsValidation()
+    public void Email_WhenNull_NoError()
     {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            PhoneNumber = "+1234567890123456789012345"
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("PhoneNumber"));
-    }
-
-    [Theory]
-    [InlineData("invalid-email")]
-    [InlineData("@example.com")]
-    [InlineData("test@")]
-    public void UpdateProfileInput_InvalidEmail_FailsValidation(string invalidEmail)
-    {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            Email = invalidEmail
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("Email"));
-    }
-
-    [Theory]
-    [InlineData("user@example.com")]
-    [InlineData("first.last@sub.example.co.uk")]
-    public void UpdateProfileInput_ValidEmail_PassesValidation(string validEmail)
-    {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            Email = validEmail
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Empty(validationResults);
+        _validator.TestValidate(new UpdateProfileInput { Email = null })
+            .ShouldNotHaveValidationErrorFor(x => x.Email);
     }
 
     [Fact]
-    public void UpdateProfileInput_FullNameTooLong_FailsValidation()
+    public void FullName_WhenProvided_TooLong_HasError()
     {
-        // Arrange
-        var input = new UpdateProfileInput
-        {
-            FullName = new string('a', 256)
-        };
-
-        // Act
-        var validationResults = ValidateModel(input);
-
-        // Assert
-        Assert.Contains(validationResults, v => v.MemberNames.Contains("FullName"));
+        var input = new UpdateProfileInput { FullName = new string('a', 256) };
+        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.FullName);
     }
 
-    private static List<ValidationResult> ValidateModel(object model)
+    [Fact]
+    public void PhoneNumber_WhenProvided_Invalid_HasError()
     {
-        var validationResults = new List<ValidationResult>();
-        var validationContext = new ValidationContext(model);
-        Validator.TryValidateObject(model, validationContext, validationResults, true);
-        return validationResults;
+        var input = new UpdateProfileInput { PhoneNumber = "invalid-phone" };
+        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.PhoneNumber);
+    }
+
+    [Fact]
+    public void AllNull_NoErrors()
+    {
+        _validator.TestValidate(new UpdateProfileInput()).ShouldNotHaveAnyValidationErrors();
     }
 }

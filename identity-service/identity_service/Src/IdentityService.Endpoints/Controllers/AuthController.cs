@@ -9,60 +9,51 @@ namespace IdentityService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public class AuthController(IAuthService authService) : ControllerBase
 {
-    private readonly IAuthService _authService;
-
-    public AuthController(IAuthService authService)
-    {
-        _authService = authService;
-    }
-
     [HttpPost("register")]
     [AllowAnonymous]
-    public async Task<ActionResult<UserType>> Register([FromBody] RegisterInput input)
+    public async Task<ActionResult<UserType>> Register([FromBody] RegisterInput input, CancellationToken ct)
     {
-        var user = await _authService.RegisterAsync(input);
+        var user = await authService.RegisterAsync(input, ct);
         return CreatedAtAction(null, new { id = user.Id }, user);
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginInput input)
+    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginInput input, CancellationToken ct)
     {
-        var response = await _authService.LoginAsync(input);
+        var response = await authService.LoginAsync(input, ct);
         return Ok(response);
     }
 
     [HttpPut("profile")]
     [Authorize]
-    public async Task<ActionResult<UserType>> UpdateProfile([FromBody] UpdateProfileInput input)
+    public async Task<ActionResult<UserType>> UpdateProfile([FromBody] UpdateProfileInput input, CancellationToken ct)
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-        if (userIdClaim == null || !int.TryParse(userIdClaim, out var userId))
-        {
+        if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
             return Unauthorized();
-        }
 
-        var user = await _authService.UpdateProfileAsync(userId, input);
+        var user = await authService.UpdateProfileAsync(userId, input, ct);
         return Ok(user);
     }
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
-    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordInput input)
+    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordInput input, CancellationToken ct)
     {
-        var response = await _authService.ForgotPasswordAsync(input);
+        var response = await authService.ForgotPasswordAsync(input, ct);
         return Ok(response);
     }
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
-    public async Task<ActionResult<OperationResult>> ResetPassword([FromBody] ResetPasswordInput input)
+    public async Task<ActionResult<OperationResult>> ResetPassword([FromBody] ResetPasswordInput input, CancellationToken ct)
     {
-        var response = await _authService.ResetPasswordAsync(input);
+        var response = await authService.ResetPasswordAsync(input, ct);
         return Ok(response);
     }
 }

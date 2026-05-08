@@ -1,138 +1,125 @@
 using System.Text;
 using IdentityService.Core.Data;
+using IdentityService.Core.Extensions;
 using IdentityService.Endpoints.GraphQL;
 using IdentityService.Endpoints.Middleware;
-using IdentityService.Core.DTOs;
-using IdentityService.Core.Repositories;
-using IdentityService.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Events;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .Enrich.WithMachineName()
+    .WriteTo.Console(outputTemplate:
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {Message:lj}{NewLine}{Exception}")
+    .CreateBootstrapLogger();
 
-// Add services to the container
-builder.Services.AddControllers();
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
 
-// Add Swagger/OpenAPI
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+    builder.Host.UseSerilog((ctx, services, cfg) => cfg
+        .ReadFrom.Configuration(ctx.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithMachineName()
+        .WriteTo.Console(outputTemplate:
+            "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {Message:lj}{NewLine}{Exception}"));
 
-// Configure Entity Framework Core with PostgreSQL
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found");
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
 
-builder.Services.AddDbContext<IdentityDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    // Core services: DbContext, repositories, services, validators, AutoMapper
+    builder.Services.AddCoreServices(builder.Configuration);
 
-// Register repositories
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+    // JWT Authentication
+    var jwtSecretKey = builder.Configuration["JwtSettings:SecretKey"]
+        ?? throw new InvalidOperationException("JWT SecretKey not configured");
+    var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "tickethub-issuer";
+    var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "tickethub-audience";
 
-// Register services
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IJwtService, JwtService>();
-builder.Services.AddScoped<IAuditService, AuditService>();
-
-// Configure JWT Authentication
-var jwtSecretKey = builder.Configuration["JwtSettings:SecretKey"]
-    ?? throw new InvalidOperationException("JWT SecretKey not configured");
-
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "tickethub-issuer";
-var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "tickethub-audience";
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
         {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
-            ValidateIssuer = true,
-            ValidIssuer = jwtIssuer,
-            ValidateAudience = true,
-            ValidAudience = jwtAudience,
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
-        };
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+                ValidateIssuer = true,
+                ValidIssuer = jwtIssuer,
+                ValidateAudience = true,
+                ValidAudience = jwtAudience,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
+        });
+
+    builder.Services.AddAuthorization();
+
+    // GraphQL — queries only; writes go through REST
+    builder.Services
+        .AddGraphQLServer()
+        .AddAuthorization()
+        .AddQueryType<Query>()
+        .AddFiltering()
+        .AddSorting();
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("DevelopmentCors", policy =>
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+
+        options.AddPolicy("ProductionCors", policy =>
+        {
+            var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                ?? [];
+            policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader();
+        });
     });
 
-builder.Services.AddAuthorization();
+    var app = builder.Build();
 
-// Configure GraphQL with Hot Chocolate (queries only — writes go through REST controllers)
-builder.Services
-    .AddGraphQLServer()
-    .AddAuthorization()
-    .AddQueryType<Query>();
-
-// Configure CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("DevelopmentCors", policy =>
+    // Apply EF migrations on startup
+    using (var scope = app.Services.CreateScope())
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-
-    options.AddPolicy("ProductionCors", policy =>
-    {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? Array.Empty<string>();
-
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-});
-
-// Configure logging
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-
-var app = builder.Build();
-
-// Apply database migrations on startup
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    try
-    {
-        dbContext.Database.Migrate();
-        app.Logger.LogInformation("Database migrations applied successfully");
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        db.Database.Migrate();
+        app.Logger.LogInformation("Database migrations applied");
     }
-    catch (Exception ex)
+
+    app.UseMiddleware<GlobalExceptionMiddleware>();
+    app.UseMiddleware<CorrelationIdMiddleware>();
+
+    if (app.Environment.IsDevelopment())
     {
-        app.Logger.LogError(ex, "Error applying database migrations");
-        throw;
+        app.UseSwagger();
+        app.UseSwaggerUI();
+        app.UseCors("DevelopmentCors");
     }
+    else
+    {
+        app.UseCors("ProductionCors");
+    }
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers();
+    app.MapGraphQL("/graphql");
+
+    app.Logger.LogInformation("Identity Service starting");
+    app.Run();
 }
-
-// Configure the HTTP request pipeline
-app.UseMiddleware<GlobalExceptionMiddleware>();
-
-if (app.Environment.IsDevelopment())
+catch (Exception ex)
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    Log.Fatal(ex, "Identity Service terminated unexpectedly");
 }
-
-if (app.Environment.IsDevelopment())
+finally
 {
-    app.UseCors("DevelopmentCors");
+    Log.CloseAndFlush();
 }
-else
-{
-    app.UseCors("ProductionCors");
-}
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-app.MapGraphQL("/graphql");
-
-app.Logger.LogInformation("Identity Service starting on port: {Port}", builder.Configuration["Port"] ?? "5001");
-
-app.Run();

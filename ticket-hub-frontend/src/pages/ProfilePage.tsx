@@ -1,97 +1,69 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { ApiError } from '@/types/api';
-import { validateEmail, validateFullName, validatePhone } from '@/utils/validation';
-import type { UpdateProfileRequest } from '@/types/auth';
 
-interface FormErrors {
-  fullName?: string;
-  email?: string;
-  phoneNumber?: string;
-}
+const schema = z.object({
+  fullName: z.string().min(2, 'Full name must be at least 2 characters').max(255),
+  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+  phoneNumber: z
+    .string()
+    .min(7, 'Phone number must be at least 7 characters')
+    .regex(/^\+?[\d\s\-(). ]+$/, 'Invalid phone number format'),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 export function ProfilePage() {
   const { user, updateProfile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [fullName, setFullName] = useState(user?.fullName ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? '');
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      fullName: user?.fullName ?? '',
+      email: user?.email ?? '',
+      phoneNumber: user?.phoneNumber ?? '',
+    },
+  });
 
-  // Keep form in sync if user is loaded asynchronously.
+  // Sync form when user loads asynchronously.
   useEffect(() => {
     if (user) {
-      setFullName(user.fullName);
-      setEmail(user.email);
-      setPhoneNumber(user.phoneNumber);
+      reset({ fullName: user.fullName, email: user.email, phoneNumber: user.phoneNumber });
     }
-  }, [user]);
+  }, [user, reset]);
 
-  const isDirty = useMemo(() => {
-    if (!user) return false;
-    return (
-      fullName.trim() !== user.fullName ||
-      email.trim() !== user.email ||
-      phoneNumber.trim() !== user.phoneNumber
-    );
-  }, [user, fullName, email, phoneNumber]);
-
-  function validate(): FormErrors {
-    return {
-      fullName: validateFullName(fullName),
-      email: validateEmail(email),
-      phoneNumber: validatePhone(phoneNumber),
-    };
-  }
-
-  function buildPayload(): UpdateProfileRequest {
-    if (!user) return {};
-    const payload: UpdateProfileRequest = {};
-    if (fullName.trim() !== user.fullName) payload.fullName = fullName.trim();
-    if (email.trim() !== user.email) payload.email = email.trim();
-    if (phoneNumber.trim() !== user.phoneNumber) payload.phoneNumber = phoneNumber.trim();
-    return payload;
-  }
-
-  function reset() {
+  async function onSubmit(values: FormValues) {
     if (!user) return;
-    setFullName(user.fullName);
-    setEmail(user.email);
-    setPhoneNumber(user.phoneNumber);
-    setErrors({});
-  }
+    const payload: Record<string, string> = {};
+    if (values.fullName.trim() !== user.fullName) payload.fullName = values.fullName.trim();
+    if (values.email.trim() !== user.email) payload.email = values.email.trim();
+    if (values.phoneNumber.trim() !== user.phoneNumber) payload.phoneNumber = values.phoneNumber.trim();
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = validate();
-    setErrors(next);
-    if (Object.values(next).some(Boolean)) return;
-    if (!isDirty) return;
-
-    setSubmitting(true);
     try {
-      await updateProfile(buildPayload());
+      await updateProfile(payload);
       toast.success('Your profile has been updated.', 'Saved');
     } catch (e) {
-      const message =
-        e instanceof ApiError ? e.message : 'Unable to update profile. Please try again.';
+      const message = e instanceof ApiError ? e.message : 'Unable to update profile. Please try again.';
       toast.error(message, 'Update failed');
-    } finally {
-      setSubmitting(false);
     }
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const initials = user.fullName
     .split(' ')
@@ -120,9 +92,7 @@ export function ProfilePage() {
             {initials || 'U'}
           </div>
           <div className="flex-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
-              Account
-            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Account</span>
             <h1 className="mt-1 font-serif text-3xl text-white sm:text-4xl">Your profile</h1>
             <p className="mt-1.5 text-sm text-white/55">
               Update your name, email, and phone number. Changes are saved instantly.
@@ -130,32 +100,29 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <form noValidate onSubmit={onSubmit} className="flex flex-col gap-5 p-7 sm:p-9">
+        <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5 p-7 sm:p-9">
           <Input
+            {...register('fullName')}
             label="Full name"
             autoComplete="name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            error={errors.fullName}
+            error={errors.fullName?.message}
             required
           />
           <Input
+            {...register('email')}
             label="Email"
             type="email"
             autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            error={errors.email}
+            error={errors.email?.message}
             hint="Used for sign-in and account recovery."
             required
           />
           <Input
+            {...register('phoneNumber')}
             label="Phone number"
             type="tel"
             autoComplete="tel"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            error={errors.phoneNumber}
+            error={errors.phoneNumber?.message}
             required
           />
 
@@ -179,12 +146,12 @@ export function ProfilePage() {
             <Button
               type="button"
               variant="secondary"
-              onClick={reset}
-              disabled={!isDirty || submitting}
+              onClick={() => reset()}
+              disabled={!isDirty || isSubmitting}
             >
               Discard
             </Button>
-            <Button type="submit" isLoading={submitting} disabled={!isDirty}>
+            <Button type="submit" isLoading={isSubmitting} disabled={!isDirty}>
               Save changes
             </Button>
           </div>
@@ -197,9 +164,7 @@ export function ProfilePage() {
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-white/5 bg-white/[0.02] px-3.5 py-3">
-      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">
-        {label}
-      </span>
+      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">{label}</span>
       <span className="text-sm text-white/85">{value}</span>
     </div>
   );

@@ -22,6 +22,8 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.HasDefaultSchema("identity");
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("Users");

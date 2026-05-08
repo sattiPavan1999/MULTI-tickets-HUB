@@ -1,10 +1,17 @@
-import { useState, type FormEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { authApi } from '@/services/api/authApi';
 import { useToast } from '@/hooks/useToast';
-import { validateEmail } from '@/utils/validation';
 import { ApiError } from '@/types/api';
+
+const schema = z.object({
+  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 interface ForgotPasswordFormProps {
   onBack: () => void;
@@ -13,50 +20,42 @@ interface ForgotPasswordFormProps {
 
 export function ForgotPasswordForm({ onBack, onTokenIssued }: ForgotPasswordFormProps) {
   const toast = useToast();
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const validationError = validateEmail(email);
-    setError(validationError);
-    if (validationError) return;
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
-    setSubmitting(true);
+  async function onSubmit({ email }: FormValues) {
     try {
       const result = await authApi.forgotPassword({ email: email.trim() });
       toast.success(result.message, 'Reset email sent');
-      // Dev/simulated mode: backend echoes the plain token. Hand it to the reset step.
       if (result.resetToken) {
         onTokenIssued(result.resetToken, email.trim());
       }
     } catch (e) {
-      const message =
-        e instanceof ApiError ? e.message : 'Unable to start reset. Please try again.';
+      const message = e instanceof ApiError ? e.message : 'Unable to start reset. Please try again.';
       toast.error(message, 'Request failed');
-    } finally {
-      setSubmitting(false);
     }
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4 animate-fade-in">
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 animate-fade-in">
       <p className="text-sm text-white/60">
         Enter the email associated with your account and we&apos;ll send a reset link.
       </p>
       <Input
+        {...register('email')}
         label="Email"
         type="email"
         autoComplete="email"
         placeholder="you@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        error={error}
+        error={errors.email?.message}
         required
         autoFocus
       />
-      <Button type="submit" size="lg" fullWidth isLoading={submitting}>
+      <Button type="submit" size="lg" fullWidth isLoading={isSubmitting}>
         Send reset link
       </Button>
       <button

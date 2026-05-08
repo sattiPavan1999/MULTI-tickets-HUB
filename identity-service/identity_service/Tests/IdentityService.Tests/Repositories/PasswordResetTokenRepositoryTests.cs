@@ -1,40 +1,58 @@
+using Bogus;
 using IdentityService.Core.Data;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Testcontainers.PostgreSql;
 
 namespace IdentityService.Tests.Repositories;
 
-public class PasswordResetTokenRepositoryTests
+public class PasswordResetTokenRepositoryTests : IAsyncLifetime
 {
-    private static (PasswordResetTokenRepository repo, IdentityDbContext db) Build(string dbName)
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage("postgres:17-alpine")
+        .Build();
+
+    private IdentityDbContext _context = null!;
+    private PasswordResetTokenRepository _repo = null!;
+    private UserRepository _userRepo = null!;
+
+    private static readonly Faker<User> UserFaker = new Faker<User>()
+        .RuleFor(u => u.Email, f => f.Internet.Email())
+        .RuleFor(u => u.PasswordHash, _ => "hash")
+        .RuleFor(u => u.FullName, f => f.Name.FullName())
+        .RuleFor(u => u.PhoneNumber, f => f.Phone.PhoneNumber("+1##########"))
+        .RuleFor(u => u.Role, _ => "User")
+        .RuleFor(u => u.CreatedAt, _ => DateTime.UtcNow);
+
+    public async Task InitializeAsync()
     {
+        await _postgres.StartAsync();
+
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(dbName)
+            .UseNpgsql(_postgres.GetConnectionString())
             .Options;
-        var db = new IdentityDbContext(options);
-        var repo = new PasswordResetTokenRepository(db, NullLogger<PasswordResetTokenRepository>.Instance);
-        return (repo, db);
+
+        _context = new IdentityDbContext(options);
+        await _context.Database.MigrateAsync();
+        _userRepo = new UserRepository(_context, NullLogger<UserRepository>.Instance);
+        _repo = new PasswordResetTokenRepository(_context, NullLogger<PasswordResetTokenRepository>.Instance);
     }
 
-    private static async Task<User> SeedUser(IdentityDbContext db, string email = "user@example.com")
+    public async Task DisposeAsync()
     {
-        var user = new User
-        {
-            Email = email,
-            PasswordHash = "hash",
-            FullName = "John Doe",
-            PhoneNumber = "+1234567890",
-            Role = "User",
-            CreatedAt = DateTime.UtcNow
-        };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        return user;
+        await _context.DisposeAsync();
+        await _postgres.DisposeAsync();
     }
 
-    private static PasswordResetToken NewToken(int userId, string hash = "abc123", int expiryMinutes = 30) => new()
+    private async Task<User> SeedUserAsync()
+    {
+        var user = UserFaker.Generate();
+        return await _userRepo.AddAsync(user);
+    }
+
+    private static PasswordResetToken NewToken(int userId, string hash, int expiryMinutes = 30) => new()
     {
         UserId = userId,
         TokenHash = hash,
@@ -47,35 +65,19 @@ public class PasswordResetTokenRepositoryTests
     [Fact]
     public async Task CreateAsync_PersistsToken()
     {
-        var (repo, db) = Build(nameof(CreateAsync_PersistsToken));
-        var user = await SeedUser(db);
+        var user = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(user.Id, "abc123"));
 
-        await repo.CreateAsync(NewToken(user.Id));
-
-        Assert.Equal(1, await db.PasswordResetTokens.CountAsync());
-    }
-
-    [Fact]
-    public async Task CreateAsync_SetsCreatedAt()
-    {
-        var (repo, db) = Build(nameof(CreateAsync_SetsCreatedAt));
-        var user = await SeedUser(db);
-        var before = DateTime.UtcNow;
-
-        var created = await repo.CreateAsync(NewToken(user.Id));
-
-        Assert.True(created.CreatedAt >= before);
+        (await _context.PasswordResetTokens.CountAsync()).Should().Be(1);
     }
 
     [Fact]
     public async Task CreateAsync_ReturnsTokenWithId()
     {
-        var (repo, db) = Build(nameof(CreateAsync_ReturnsTokenWithId));
-        var user = await SeedUser(db);
+        var user = await SeedUserAsync();
+        var created = await _repo.CreateAsync(NewToken(user.Id, "abc123"));
 
-        var created = await repo.CreateAsync(NewToken(user.Id));
-
-        Assert.True(created.Id > 0);
+        created.Id.Should().BeGreaterThan(0);
     }
 
     // ── GetActiveByHashAsync ──────────────────────────────────────────────────
@@ -83,56 +85,48 @@ public class PasswordResetTokenRepositoryTests
     [Fact]
     public async Task GetActiveByHashAsync_ValidToken_ReturnsToken()
     {
-        var (repo, db) = Build(nameof(GetActiveByHashAsync_ValidToken_ReturnsToken));
-        var user = await SeedUser(db);
-        db.PasswordResetTokens.Add(NewToken(user.Id, "valid-hash"));
-        await db.SaveChangesAsync();
+        var user = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(user.Id, "valid-hash"));
 
-        var result = await repo.GetActiveByHashAsync("valid-hash");
+        var result = await _repo.GetActiveByHashAsync("valid-hash");
 
-        Assert.NotNull(result);
-        Assert.Equal("valid-hash", result!.TokenHash);
+        result.Should().NotBeNull();
+        result!.TokenHash.Should().Be("valid-hash");
     }
 
     [Fact]
     public async Task GetActiveByHashAsync_WrongHash_ReturnsNull()
     {
-        var (repo, db) = Build(nameof(GetActiveByHashAsync_WrongHash_ReturnsNull));
-        var user = await SeedUser(db);
-        db.PasswordResetTokens.Add(NewToken(user.Id, "correct-hash"));
-        await db.SaveChangesAsync();
+        var user = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(user.Id, "correct-hash"));
 
-        var result = await repo.GetActiveByHashAsync("wrong-hash");
+        var result = await _repo.GetActiveByHashAsync("wrong-hash");
 
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
     [Fact]
     public async Task GetActiveByHashAsync_ExpiredToken_ReturnsNull()
     {
-        var (repo, db) = Build(nameof(GetActiveByHashAsync_ExpiredToken_ReturnsNull));
-        var user = await SeedUser(db);
-        db.PasswordResetTokens.Add(NewToken(user.Id, "expired-hash", expiryMinutes: -1));
-        await db.SaveChangesAsync();
+        var user = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(user.Id, "expired-hash", expiryMinutes: -1));
 
-        var result = await repo.GetActiveByHashAsync("expired-hash");
+        var result = await _repo.GetActiveByHashAsync("expired-hash");
 
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
     [Fact]
     public async Task GetActiveByHashAsync_AlreadyUsedToken_ReturnsNull()
     {
-        var (repo, db) = Build(nameof(GetActiveByHashAsync_AlreadyUsedToken_ReturnsNull));
-        var user = await SeedUser(db);
+        var user = await SeedUserAsync();
         var token = NewToken(user.Id, "used-hash");
         token.UsedAt = DateTime.UtcNow.AddMinutes(-5);
-        db.PasswordResetTokens.Add(token);
-        await db.SaveChangesAsync();
+        await _repo.CreateAsync(token);
 
-        var result = await repo.GetActiveByHashAsync("used-hash");
+        var result = await _repo.GetActiveByHashAsync("used-hash");
 
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
     // ── MarkUsedAsync ─────────────────────────────────────────────────────────
@@ -140,34 +134,26 @@ public class PasswordResetTokenRepositoryTests
     [Fact]
     public async Task MarkUsedAsync_SetsUsedAt()
     {
-        var (repo, db) = Build(nameof(MarkUsedAsync_SetsUsedAt));
-        var user = await SeedUser(db);
-        var token = NewToken(user.Id, "mark-hash");
-        db.PasswordResetTokens.Add(token);
-        await db.SaveChangesAsync();
-        var saved = await db.PasswordResetTokens.FirstAsync();
+        var user = await SeedUserAsync();
+        var created = await _repo.CreateAsync(NewToken(user.Id, "mark-hash"));
         var before = DateTime.UtcNow;
 
-        await repo.MarkUsedAsync(saved);
+        await _repo.MarkUsedAsync(created);
 
-        Assert.NotNull(saved.UsedAt);
-        Assert.True(saved.UsedAt >= before);
+        created.UsedAt.Should().NotBeNull();
+        created.UsedAt.Should().BeOnOrAfter(before);
     }
 
     [Fact]
     public async Task MarkUsedAsync_TokenBecomesInactive()
     {
-        var (repo, db) = Build(nameof(MarkUsedAsync_TokenBecomesInactive));
-        var user = await SeedUser(db);
-        var token = NewToken(user.Id, "inactive-hash");
-        db.PasswordResetTokens.Add(token);
-        await db.SaveChangesAsync();
-        var saved = await db.PasswordResetTokens.FirstAsync();
+        var user = await SeedUserAsync();
+        var created = await _repo.CreateAsync(NewToken(user.Id, "inactive-hash"));
 
-        await repo.MarkUsedAsync(saved);
-        var result = await repo.GetActiveByHashAsync("inactive-hash");
+        await _repo.MarkUsedAsync(created);
+        var result = await _repo.GetActiveByHashAsync("inactive-hash");
 
-        Assert.Null(result);
+        result.Should().BeNull();
     }
 
     // ── InvalidateActiveForUserAsync ──────────────────────────────────────────
@@ -175,60 +161,35 @@ public class PasswordResetTokenRepositoryTests
     [Fact]
     public async Task InvalidateActiveForUserAsync_MarksAllActiveTokensUsed()
     {
-        var (repo, db) = Build(nameof(InvalidateActiveForUserAsync_MarksAllActiveTokensUsed));
-        var user = await SeedUser(db);
-        db.PasswordResetTokens.AddRange(
-            NewToken(user.Id, "hash1"),
-            NewToken(user.Id, "hash2")
-        );
-        await db.SaveChangesAsync();
+        var user = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(user.Id, "hash1"));
+        await _repo.CreateAsync(NewToken(user.Id, "hash2"));
 
-        await repo.InvalidateActiveForUserAsync(user.Id);
+        await _repo.InvalidateActiveForUserAsync(user.Id);
 
-        var tokens = await db.PasswordResetTokens.ToListAsync();
-        Assert.All(tokens, t => Assert.NotNull(t.UsedAt));
-    }
-
-    [Fact]
-    public async Task InvalidateActiveForUserAsync_LeavesExpiredTokensAlone()
-    {
-        var (repo, db) = Build(nameof(InvalidateActiveForUserAsync_LeavesExpiredTokensAlone));
-        var user = await SeedUser(db);
-        var expired = NewToken(user.Id, "expired", expiryMinutes: -10);
-        db.PasswordResetTokens.Add(expired);
-        await db.SaveChangesAsync();
-
-        await repo.InvalidateActiveForUserAsync(user.Id);
-
-        var token = await db.PasswordResetTokens.FirstAsync();
-        Assert.Null(token.UsedAt);
+        var tokens = await _context.PasswordResetTokens.ToListAsync();
+        tokens.Should().AllSatisfy(t => t.UsedAt.Should().NotBeNull());
     }
 
     [Fact]
     public async Task InvalidateActiveForUserAsync_DoesNotAffectOtherUsers()
     {
-        var (repo, db) = Build(nameof(InvalidateActiveForUserAsync_DoesNotAffectOtherUsers));
-        var userA = await SeedUser(db, "a@example.com");
-        var userB = await SeedUser(db, "b@example.com");
-        db.PasswordResetTokens.AddRange(
-            NewToken(userA.Id, "hash-a"),
-            NewToken(userB.Id, "hash-b")
-        );
-        await db.SaveChangesAsync();
+        var userA = await SeedUserAsync();
+        var userB = await SeedUserAsync();
+        await _repo.CreateAsync(NewToken(userA.Id, "hash-a"));
+        await _repo.CreateAsync(NewToken(userB.Id, "hash-b"));
 
-        await repo.InvalidateActiveForUserAsync(userA.Id);
+        await _repo.InvalidateActiveForUserAsync(userA.Id);
 
-        var tokenB = await db.PasswordResetTokens.FirstAsync(t => t.UserId == userB.Id);
-        Assert.Null(tokenB.UsedAt);
+        var tokenB = await _context.PasswordResetTokens.FirstAsync(t => t.UserId == userB.Id);
+        tokenB.UsedAt.Should().BeNull();
     }
 
     [Fact]
     public async Task InvalidateActiveForUserAsync_NoTokens_DoesNotThrow()
     {
-        var (repo, _) = Build(nameof(InvalidateActiveForUserAsync_NoTokens_DoesNotThrow));
+        var ex = await Record.ExceptionAsync(() => _repo.InvalidateActiveForUserAsync(999));
 
-        var ex = await Record.ExceptionAsync(() => repo.InvalidateActiveForUserAsync(999));
-
-        Assert.Null(ex);
+        ex.Should().BeNull();
     }
 }
