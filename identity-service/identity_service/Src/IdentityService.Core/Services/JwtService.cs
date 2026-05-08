@@ -8,30 +8,27 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace IdentityService.Core.Services;
 
-/// <summary>
-/// JWT token service implementation
-/// </summary>
 public class JwtService : IJwtService
 {
-    private readonly IConfiguration _configuration;
     private readonly ILogger<JwtService> _logger;
+    private readonly string _secretKey;
+    private readonly string _issuer;
+    private readonly string _audience;
+    private readonly int _expiryMinutes;
 
     public JwtService(IConfiguration configuration, ILogger<JwtService> logger)
     {
-        _configuration = configuration;
         _logger = logger;
+        _secretKey = configuration["JwtSettings:SecretKey"]
+            ?? throw new InvalidOperationException("JWT SecretKey not configured");
+        _issuer = configuration["JwtSettings:Issuer"] ?? "IdentityService";
+        _audience = configuration["JwtSettings:Audience"] ?? "TicketHub";
+        _expiryMinutes = int.Parse(configuration["JwtSettings:ExpiryMinutes"] ?? "60");
     }
 
     public string GenerateToken(User user)
     {
-        var secretKey = _configuration["JwtSettings:SecretKey"]
-            ?? throw new InvalidOperationException("JWT SecretKey not configured");
-
-        var issuer = _configuration["JwtSettings:Issuer"] ?? "IdentityService";
-        var audience = _configuration["JwtSettings:Audience"] ?? "TicketHub";
-        var expiryMinutes = int.Parse(_configuration["JwtSettings:ExpiryMinutes"] ?? "60");
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -43,10 +40,10 @@ public class JwtService : IJwtService
         };
 
         var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
+            issuer: _issuer,
+            audience: _audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            expires: DateTime.UtcNow.AddMinutes(_expiryMinutes),
             signingCredentials: credentials
         );
 
@@ -61,23 +58,17 @@ public class JwtService : IJwtService
     {
         try
         {
-            var secretKey = _configuration["JwtSettings:SecretKey"]
-                ?? throw new InvalidOperationException("JWT SecretKey not configured");
-
-            var issuer = _configuration["JwtSettings:Issuer"] ?? "IdentityService";
-            var audience = _configuration["JwtSettings:Audience"] ?? "TicketHub";
-
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(secretKey);
+            var key = Encoding.UTF8.GetBytes(_secretKey);
 
             tokenHandler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(key),
                 ValidateIssuer = true,
-                ValidIssuer = issuer,
+                ValidIssuer = _issuer,
                 ValidateAudience = true,
-                ValidAudience = audience,
+                ValidAudience = _audience,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             }, out _);

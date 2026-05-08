@@ -13,294 +13,107 @@ public class HealthControllerTests
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
     }
 
-    [Fact]
-    public void Constructor_WithValidLogger_ShouldCreateInstance()
-    {
-        // Arrange
-        var logger = new TestLogger();
-
-        // Act
-        var controller = new HealthController(logger);
-
-        // Assert
-        Assert.NotNull(controller);
-    }
+    private readonly HealthController _controller = new(new TestLogger());
 
     [Fact]
     public void Health_ShouldReturnOkResult()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result = controller.Health();
-
-        // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<OkObjectResult>(_controller.Health());
     }
 
     [Fact]
     public void Health_ShouldReturnHealthyStatus()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
+        var result = _controller.Health() as OkObjectResult;
 
-        // Act
-        var result = controller.Health() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("Healthy", statusProperty.GetValue(value));
+        Assert.Equal("Healthy", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void Health_ShouldReturnTimestamp()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-        var beforeCall = DateTime.UtcNow;
+        var before = DateTime.UtcNow;
+        var result = _controller.Health() as OkObjectResult;
+        var after = DateTime.UtcNow;
 
-        // Act
-        var result = controller.Health() as OkObjectResult;
-        var afterCall = DateTime.UtcNow;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var timestampProperty = value.GetType().GetProperty("timestamp");
+        var timestampProperty = result.Value?.GetType().GetProperty("timestamp");
         Assert.NotNull(timestampProperty);
-        var timestamp = (DateTime)timestampProperty.GetValue(value)!;
-
-        Assert.True(timestamp >= beforeCall && timestamp <= afterCall);
+        var timestamp = (DateTime)timestampProperty.GetValue(result.Value)!;
+        Assert.True(timestamp >= before && timestamp <= after);
     }
 
     [Fact]
     public void Ready_ShouldReturnOkResult()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result = controller.Ready();
-
-        // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<OkObjectResult>(_controller.Ready());
     }
 
     [Fact]
     public void Ready_ShouldReturnReadyStatus()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
+        var result = _controller.Ready() as OkObjectResult;
 
-        // Act
-        var result = controller.Ready() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("Ready", statusProperty.GetValue(value));
+        Assert.Equal("Ready", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void Ready_ShouldReturnTimestamp()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-        var beforeCall = DateTime.UtcNow;
+        var before = DateTime.UtcNow;
+        var result = _controller.Ready() as OkObjectResult;
+        var after = DateTime.UtcNow;
 
-        // Act
-        var result = controller.Ready() as OkObjectResult;
-        var afterCall = DateTime.UtcNow;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var timestampProperty = value.GetType().GetProperty("timestamp");
+        var timestampProperty = result.Value?.GetType().GetProperty("timestamp");
         Assert.NotNull(timestampProperty);
-        var timestamp = (DateTime)timestampProperty.GetValue(value)!;
-
-        Assert.True(timestamp >= beforeCall && timestamp <= afterCall);
+        var timestamp = (DateTime)timestampProperty.GetValue(result.Value)!;
+        Assert.True(timestamp >= before && timestamp <= after);
     }
 
     [Fact]
     public void Live_ShouldReturnOkResult()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result = controller.Live();
-
-        // Assert
-        Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<OkObjectResult>(_controller.Live());
     }
 
     [Fact]
     public void Live_ShouldReturnLiveStatus()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
+        var result = _controller.Live() as OkObjectResult;
 
-        // Act
-        var result = controller.Live() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("Live", statusProperty.GetValue(value));
+        Assert.Equal("Live", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void Live_ShouldReturnTimestamp()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-        var beforeCall = DateTime.UtcNow;
+        var before = DateTime.UtcNow;
+        var result = _controller.Live() as OkObjectResult;
+        var after = DateTime.UtcNow;
 
-        // Act
-        var result = controller.Live() as OkObjectResult;
-        var afterCall = DateTime.UtcNow;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var timestampProperty = value.GetType().GetProperty("timestamp");
+        var timestampProperty = result.Value?.GetType().GetProperty("timestamp");
         Assert.NotNull(timestampProperty);
-        var timestamp = (DateTime)timestampProperty.GetValue(value)!;
-
-        Assert.True(timestamp >= beforeCall && timestamp <= afterCall);
-    }
-
-    [Fact]
-    public void MultipleHealthCalls_ShouldReturnConsistentResults()
-    {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result1 = controller.Health() as OkObjectResult;
-        var result2 = controller.Health() as OkObjectResult;
-
-        // Assert
-        Assert.NotNull(result1);
-        Assert.NotNull(result2);
-
-        var value1 = result1.Value;
-        var value2 = result2.Value;
-        Assert.NotNull(value1);
-        Assert.NotNull(value2);
-
-        var status1 = value1.GetType().GetProperty("status")?.GetValue(value1);
-        var status2 = value2.GetType().GetProperty("status")?.GetValue(value2);
-
-        Assert.Equal(status1, status2);
-        Assert.Equal("Healthy", status1);
-    }
-
-    [Fact]
-    public void MultipleReadyCalls_ShouldReturnConsistentResults()
-    {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result1 = controller.Ready() as OkObjectResult;
-        var result2 = controller.Ready() as OkObjectResult;
-
-        // Assert
-        Assert.NotNull(result1);
-        Assert.NotNull(result2);
-
-        var value1 = result1.Value;
-        var value2 = result2.Value;
-        Assert.NotNull(value1);
-        Assert.NotNull(value2);
-
-        var status1 = value1.GetType().GetProperty("status")?.GetValue(value1);
-        var status2 = value2.GetType().GetProperty("status")?.GetValue(value2);
-
-        Assert.Equal(status1, status2);
-        Assert.Equal("Ready", status1);
-    }
-
-    [Fact]
-    public void MultipleLiveCalls_ShouldReturnConsistentResults()
-    {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var result1 = controller.Live() as OkObjectResult;
-        var result2 = controller.Live() as OkObjectResult;
-
-        // Assert
-        Assert.NotNull(result1);
-        Assert.NotNull(result2);
-
-        var value1 = result1.Value;
-        var value2 = result2.Value;
-        Assert.NotNull(value1);
-        Assert.NotNull(value2);
-
-        var status1 = value1.GetType().GetProperty("status")?.GetValue(value1);
-        var status2 = value2.GetType().GetProperty("status")?.GetValue(value2);
-
-        Assert.Equal(status1, status2);
-        Assert.Equal("Live", status1);
+        var timestamp = (DateTime)timestampProperty.GetValue(result.Value)!;
+        Assert.True(timestamp >= before && timestamp <= after);
     }
 
     [Fact]
     public void AllEndpoints_ShouldReturnDifferentStatuses()
     {
-        // Arrange
-        var logger = new TestLogger();
-        var controller = new HealthController(logger);
-
-        // Act
-        var healthResult = controller.Health() as OkObjectResult;
-        var readyResult = controller.Ready() as OkObjectResult;
-        var liveResult = controller.Live() as OkObjectResult;
-
-        // Assert
-        Assert.NotNull(healthResult);
-        Assert.NotNull(readyResult);
-        Assert.NotNull(liveResult);
-
-        var healthStatus = healthResult.Value?.GetType().GetProperty("status")?.GetValue(healthResult.Value);
-        var readyStatus = readyResult.Value?.GetType().GetProperty("status")?.GetValue(readyResult.Value);
-        var liveStatus = liveResult.Value?.GetType().GetProperty("status")?.GetValue(liveResult.Value);
+        var healthStatus = (_controller.Health() as OkObjectResult)?.Value?.GetType().GetProperty("status")?.GetValue((_controller.Health() as OkObjectResult)!.Value);
+        var readyStatus = (_controller.Ready() as OkObjectResult)?.Value?.GetType().GetProperty("status")?.GetValue((_controller.Ready() as OkObjectResult)!.Value);
+        var liveStatus = (_controller.Live() as OkObjectResult)?.Value?.GetType().GetProperty("status")?.GetValue((_controller.Live() as OkObjectResult)!.Value);
 
         Assert.Equal("Healthy", healthStatus);
         Assert.Equal("Ready", readyStatus);

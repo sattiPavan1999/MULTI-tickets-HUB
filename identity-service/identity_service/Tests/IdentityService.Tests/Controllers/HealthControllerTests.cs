@@ -8,27 +8,23 @@ namespace IdentityService.Tests.Controllers;
 
 public class HealthControllerTests
 {
-    private readonly ILogger<HealthController> _logger;
+    private readonly HealthController _controller;
 
     public HealthControllerTests()
     {
-        _logger = new LoggerFactory().CreateLogger<HealthController>();
+        var options = new DbContextOptionsBuilder<IdentityDbContext>()
+            .UseInMemoryDatabase(databaseName: "HealthTestDb")
+            .Options;
+        var context = new IdentityDbContext(options);
+        var logger = new LoggerFactory().CreateLogger<HealthController>();
+        _controller = new HealthController(context, logger);
     }
 
     [Fact]
     public void Live_ReturnsOkResult()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_Live")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = _controller.Live();
 
-        // Act
-        var result = controller.Live();
-
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(200, okResult.StatusCode);
     }
@@ -36,67 +32,33 @@ public class HealthControllerTests
     [Fact]
     public void Live_ReturnsStatusAlive()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_LiveStatus")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = _controller.Live() as OkObjectResult;
 
-        // Act
-        var result = controller.Live() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("alive", statusProperty.GetValue(value));
+        Assert.Equal("alive", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void Live_ReturnsTimestamp()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_LiveTimestamp")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
-        var beforeCall = DateTime.UtcNow;
+        var before = DateTime.UtcNow;
+        var result = _controller.Live() as OkObjectResult;
+        var after = DateTime.UtcNow;
 
-        // Act
-        var result = controller.Live() as OkObjectResult;
-        var afterCall = DateTime.UtcNow;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var timestampProperty = value.GetType().GetProperty("timestamp");
+        var timestampProperty = result.Value?.GetType().GetProperty("timestamp");
         Assert.NotNull(timestampProperty);
-        var timestamp = (DateTime)timestampProperty.GetValue(value)!;
-        Assert.True(timestamp >= beforeCall);
-        Assert.True(timestamp <= afterCall);
+        var timestamp = (DateTime)timestampProperty.GetValue(result.Value)!;
+        Assert.True(timestamp >= before && timestamp <= after);
     }
 
     [Fact]
     public async Task Ready_WithHealthyDatabase_ReturnsOkResult()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_Ready")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = await _controller.Ready();
 
-        // Act
-        var result = await controller.Ready();
-
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(200, okResult.StatusCode);
     }
@@ -104,63 +66,30 @@ public class HealthControllerTests
     [Fact]
     public async Task Ready_ReturnsStatusReady()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_ReadyStatus")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = await _controller.Ready() as OkObjectResult;
 
-        // Act
-        var result = await controller.Ready() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("ready", statusProperty.GetValue(value));
+        Assert.Equal("ready", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public async Task Ready_ReturnsDatabaseStatus()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_ReadyDbStatus")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = await _controller.Ready() as OkObjectResult;
 
-        // Act
-        var result = await controller.Ready() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var databaseProperty = value.GetType().GetProperty("database");
+        var databaseProperty = result.Value?.GetType().GetProperty("database");
         Assert.NotNull(databaseProperty);
-        Assert.Equal("connected", databaseProperty.GetValue(value));
+        Assert.Equal("connected", databaseProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void V1Health_ReturnsOkResult()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_V1")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = _controller.V1Health();
 
-        // Act
-        var result = controller.V1Health();
-
-        // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(200, okResult.StatusCode);
     }
@@ -168,73 +97,36 @@ public class HealthControllerTests
     [Fact]
     public void V1Health_ReturnsStatusHealthy()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_V1Status")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = _controller.V1Health() as OkObjectResult;
 
-        // Act
-        var result = controller.V1Health() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var statusProperty = value.GetType().GetProperty("status");
+        var statusProperty = result.Value?.GetType().GetProperty("status");
         Assert.NotNull(statusProperty);
-        Assert.Equal("healthy", statusProperty.GetValue(value));
+        Assert.Equal("healthy", statusProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void V1Health_ReturnsServiceName()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_V1Service")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
+        var result = _controller.V1Health() as OkObjectResult;
 
-        // Act
-        var result = controller.V1Health() as OkObjectResult;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var serviceProperty = value.GetType().GetProperty("service");
+        var serviceProperty = result.Value?.GetType().GetProperty("service");
         Assert.NotNull(serviceProperty);
-        Assert.Equal("identity-service", serviceProperty.GetValue(value));
+        Assert.Equal("identity-service", serviceProperty.GetValue(result.Value));
     }
 
     [Fact]
     public void V1Health_ReturnsTimestamp()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseInMemoryDatabase(databaseName: "HealthTestDb_V1Timestamp")
-            .Options;
-        var context = new IdentityDbContext(options);
-        var controller = new HealthController(context, _logger);
-        var beforeCall = DateTime.UtcNow;
+        var before = DateTime.UtcNow;
+        var result = _controller.V1Health() as OkObjectResult;
+        var after = DateTime.UtcNow;
 
-        // Act
-        var result = controller.V1Health() as OkObjectResult;
-        var afterCall = DateTime.UtcNow;
-
-        // Assert
         Assert.NotNull(result);
-        var value = result.Value;
-        Assert.NotNull(value);
-
-        var timestampProperty = value.GetType().GetProperty("timestamp");
+        var timestampProperty = result.Value?.GetType().GetProperty("timestamp");
         Assert.NotNull(timestampProperty);
-        var timestamp = (DateTime)timestampProperty.GetValue(value)!;
-        Assert.True(timestamp >= beforeCall);
-        Assert.True(timestamp <= afterCall);
+        var timestamp = (DateTime)timestampProperty.GetValue(result.Value)!;
+        Assert.True(timestamp >= before && timestamp <= after);
     }
 }

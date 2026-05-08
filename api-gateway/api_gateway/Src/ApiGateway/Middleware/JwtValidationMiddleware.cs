@@ -48,28 +48,14 @@ public class JwtValidationMiddleware
             if (string.IsNullOrEmpty(authHeader))
             {
                 _logger.LogWarning("Authorization header missing for path: {Path}", path);
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    errorCode = "UNAUTHORIZED",
-                    message = "Authorization header missing",
-                    timestamp = DateTime.UtcNow,
-                    traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
-                });
+                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Authorization header missing");
                 return;
             }
 
             if (!authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning("Invalid Authorization header format for path: {Path}", path);
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    errorCode = "UNAUTHORIZED",
-                    message = "Invalid token format",
-                    timestamp = DateTime.UtcNow,
-                    traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
-                });
+                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Invalid token format");
                 return;
             }
 
@@ -78,14 +64,7 @@ public class JwtValidationMiddleware
             if (!ValidateToken(token, out var validationError, out var role))
             {
                 _logger.LogWarning("JWT validation failed for path: {Path}. Error: {Error}", path, validationError);
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    errorCode = "UNAUTHORIZED",
-                    message = validationError,
-                    timestamp = DateTime.UtcNow,
-                    traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
-                });
+                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", validationError);
                 return;
             }
 
@@ -95,14 +74,7 @@ public class JwtValidationMiddleware
                 if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Insufficient permissions for admin route. User role: {Role}", role);
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await context.Response.WriteAsJsonAsync(new
-                    {
-                        errorCode = "FORBIDDEN",
-                        message = "Insufficient permissions",
-                        timestamp = DateTime.UtcNow,
-                        traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
-                    });
+                    await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "FORBIDDEN", "Insufficient permissions");
                     return;
                 }
             }
@@ -113,6 +85,18 @@ public class JwtValidationMiddleware
         await _next(context);
     }
 
+    private static async Task WriteErrorAsync(HttpContext context, int statusCode, string errorCode, string message)
+    {
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            errorCode,
+            message,
+            timestamp = DateTime.UtcNow,
+            traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier
+        });
+    }
+
     private bool ValidateToken(string token, out string errorMessage, out string? role)
     {
         errorMessage = string.Empty;
@@ -120,7 +104,6 @@ public class JwtValidationMiddleware
 
         try
         {
-            // Check token format (should have 3 parts separated by dots)
             var parts = token.Split('.');
             if (parts.Length != 3)
             {
@@ -145,7 +128,6 @@ public class JwtValidationMiddleware
 
             var principal = tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
 
-            // Extract role claim (try both "role" and ClaimTypes.Role)
             role = principal.Claims.FirstOrDefault(c => c.Type == "role")?.Value
                 ?? principal.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
 
