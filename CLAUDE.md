@@ -40,6 +40,10 @@ dotnet test identity-service/identity_service/Tests/IdentityService.Tests/Identi
 dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
   --filter "FullyQualifiedName!~RepositoryTests"
 
+# Run only repository (Testcontainer) tests — Docker Desktop must be open
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
+  --filter "FullyQualifiedName~RepositoryTests"
+
 # Run locally without Docker (needs Postgres on 5435 + .env vars exported)
 dotnet run --project identity-service/identity_service/Src/IdentityService.Endpoints
 ```
@@ -133,9 +137,21 @@ All GraphQL queries in identity-service require `[Authorize]`.
       GraphQL/           Moq IAuthService + IUserRepository
       Middleware/
       Models/            FluentValidation TestHelper (TestValidate / ShouldHaveValidationErrorFor)
-      Repositories/      Testcontainers PostgreSQL — requires Docker at test time
+      Repositories/      Testcontainers PostgreSQL — requires Docker Desktop to be running
       Services/          EF InMemory for workflow tests; Moq for unit tests; Bogus for test data
 ```
+
+### Testcontainers setup
+
+Repository tests use Testcontainers with a shared `PostgresFixture` (one container per test run via `[Collection("postgres")]`). Key requirements:
+
+- **Docker Desktop must be open** before running repository tests. Testcontainers connects via `/var/run/docker.sock`, which is Docker Desktop's socket on this machine.
+- If running with **Colima only** (without Docker Desktop), export `DOCKER_HOST` before running tests:
+  ```bash
+  export DOCKER_HOST=unix:///Users/pavansainadhareddysatti/.colima/default/docker.sock
+  ```
+  and ensure `~/.testcontainers.properties` contains `ryuk.disabled=true`.
+- `xunit.runner.json` disables parallel test collections so Testcontainer tests don't race with in-memory tests in the same run.
 
 ### DI registration pattern
 
