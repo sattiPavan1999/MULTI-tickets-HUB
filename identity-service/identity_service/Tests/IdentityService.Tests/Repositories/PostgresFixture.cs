@@ -7,13 +7,20 @@ namespace IdentityService.Tests.Repositories;
 /// <summary>
 /// Starts a single Postgres container and applies migrations once for the entire collection.
 /// Individual tests share the container and clean their own data in InitializeAsync.
+/// The Docker endpoint is resolved from DOCKER_HOST (falls back to /var/run/docker.sock).
 /// </summary>
 [CollectionDefinition("postgres")]
 public class PostgresCollection : ICollectionFixture<PostgresFixture> { }
 
 public class PostgresFixture : IAsyncLifetime
 {
+    // Resolve Docker socket from env var so Colima, Docker Desktop, and CI all work
+    private static readonly string DockerEndpoint =
+        Environment.GetEnvironmentVariable("DOCKER_HOST")
+        ?? "unix:///var/run/docker.sock";
+
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
+        .WithDockerEndpoint(DockerEndpoint)
         .WithImage("postgres:17-alpine")
         .Build();
 
