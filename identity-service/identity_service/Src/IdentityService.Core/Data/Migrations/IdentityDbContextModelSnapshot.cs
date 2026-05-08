@@ -83,6 +83,11 @@ namespace IdentityService.Core.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(512)

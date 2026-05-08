@@ -41,7 +41,8 @@ public class JwtValidationMiddleware
         // Protected routes require JWT validation
         if (path.StartsWith("/graphql/trains") ||
             path.StartsWith("/graphql/movies") ||
-            path.StartsWith("/graphql/admin"))
+            path.StartsWith("/graphql/admin") ||
+            path.StartsWith("/api/admin"))
         {
             var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
 
@@ -69,7 +70,7 @@ public class JwtValidationMiddleware
             }
 
             // Check role for admin routes
-            if (path.StartsWith("/graphql/admin"))
+            if (path.StartsWith("/graphql/admin") || path.StartsWith("/api/admin"))
             {
                 if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
                 {

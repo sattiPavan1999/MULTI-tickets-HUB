@@ -103,7 +103,7 @@ public class AuthServiceTests
 
     // ── Mocked wiring ─────────────────────────────────────────────────────────
 
-    private static User MakeEntity(string? email = null) => new()
+    private static User MakeEntity(string? email = null, bool isActive = true) => new()
     {
         Id = Fake.Random.Int(1, 1000),
         Email = email ?? Fake.Internet.Email(),
@@ -111,6 +111,7 @@ public class AuthServiceTests
         FullName = Fake.Name.FullName(),
         PhoneNumber = Fake.Phone.PhoneNumber("+1##########"),
         Role = "User",
+        IsActive = isActive,
         CreatedAt = DateTime.UtcNow
     };
 
@@ -238,6 +239,19 @@ public class AuthServiceTests
 
         await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "WrongPassword!" }))
             .Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task Login_DeactivatedAccount_ThrowsUnauthorizedException()
+    {
+        var entity = MakeEntity(isActive: false);
+        var userRepo = new Mock<IUserRepository>();
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        var svc = BuildMocked(userRepo);
+
+        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" }))
+            .Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*deactivated*");
     }
 
     // ── GetUserById ────────────────────────────────────────────────────────────
@@ -415,6 +429,45 @@ public class AuthServiceTests
             Token = forgot.ResetToken!,
             NewPassword = "Second1!"
         })).Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    // ── ToggleUserStatus ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ToggleUserStatus_ActiveUser_DeactivatesAndReturnsSuccess()
+    {
+        var (svc, db) = BuildFullService(nameof(ToggleUserStatus_ActiveUser_DeactivatesAndReturnsSuccess));
+        var user = await SeedUserAsync(db);
+
+        var result = await svc.ToggleUserStatusAsync(user.Id);
+
+        result.Success.Should().BeTrue();
+        var refreshed = await db.Users.FindAsync(user.Id);
+        refreshed!.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ToggleUserStatus_InactiveUser_ActivatesAndReturnsSuccess()
+    {
+        var (svc, db) = BuildFullService(nameof(ToggleUserStatus_InactiveUser_ActivatesAndReturnsSuccess));
+        var user = await SeedUserAsync(db);
+        user.IsActive = false;
+        await db.SaveChangesAsync();
+
+        var result = await svc.ToggleUserStatusAsync(user.Id);
+
+        result.Success.Should().BeTrue();
+        var refreshed = await db.Users.FindAsync(user.Id);
+        refreshed!.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ToggleUserStatus_UnknownUser_ThrowsNotFoundException()
+    {
+        var (svc, _) = BuildFullService(nameof(ToggleUserStatus_UnknownUser_ThrowsNotFoundException));
+
+        await svc.Invoking(s => s.ToggleUserStatusAsync(9999))
+            .Should().ThrowAsync<NotFoundException>();
     }
 
     // ── Stubs ─────────────────────────────────────────────────────────────────

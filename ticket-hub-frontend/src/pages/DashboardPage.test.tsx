@@ -38,6 +38,11 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: /train tickets/i })).toBeInTheDocument();
   });
 
+  it('does not show Admin Panel card for regular user', () => {
+    renderDashboard();
+    expect(screen.queryByRole('button', { name: /admin panel/i })).not.toBeInTheDocument();
+  });
+
   it('navigates to /movies when Movie tickets card is clicked', async () => {
     const user = userEvent.setup();
     render(

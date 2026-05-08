@@ -1,6 +1,8 @@
 using System.Text;
 using IdentityService.Core.Data;
 using IdentityService.Core.Extensions;
+using IdentityService.Core.Models;
+using IdentityService.Core.Repositories;
 using IdentityService.Endpoints.GraphQL;
 using IdentityService.Endpoints.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -90,6 +92,25 @@ try
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         db.Database.Migrate();
         app.Logger.LogInformation("Database migrations applied");
+    }
+
+    // Seed default admin user
+    using (var seedScope = app.Services.CreateScope())
+    {
+        var userRepo = seedScope.ServiceProvider.GetRequiredService<IUserRepository>();
+        if (!await userRepo.EmailExistsAsync("admin@email.com", CancellationToken.None))
+        {
+            await userRepo.AddAsync(new User
+            {
+                Email = "admin@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin"),
+                FullName = "Admin",
+                PhoneNumber = "0000000000",
+                Role = "Admin",
+                IsActive = true
+            }, CancellationToken.None);
+            app.Logger.LogInformation("Default admin user seeded");
+        }
     }
 
     app.UseMiddleware<GlobalExceptionMiddleware>();

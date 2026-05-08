@@ -58,4 +58,17 @@ public class UserAccountService(
 
     public Task<int> GetUserCountAsync(CancellationToken ct = default)
         => userRepository.CountAsync(ct);
+
+    public async Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default)
+    {
+        var user = await userRepository.GetByIdAsync(userId, ct)
+            ?? throw new NotFoundException("User not found");
+
+        user.IsActive = !user.IsActive;
+        await userRepository.UpdateAsync(user, ct);
+        await auditService.LogAsync($"User status toggled: {user.Email} → IsActive={user.IsActive}");
+
+        var status = user.IsActive ? "activated" : "deactivated";
+        return new OperationResult { Success = true, Message = $"User account {status}" };
+    }
 }

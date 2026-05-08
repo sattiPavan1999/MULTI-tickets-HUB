@@ -34,4 +34,9 @@ public class UserType
     /// Account creation timestamp
     /// </summary>
     public DateTime? CreatedAt { get; set; }
+
+    /// <summary>
+    /// Whether the account is active
+    /// </summary>
+    public bool IsActive { get; set; }
 }

@@ -216,4 +216,34 @@ public class AuthControllerTests
 
         svc.Verify(s => s.ResetPasswordAsync(input, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    // ── ToggleUserStatus ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ToggleUserStatus_ValidId_Returns200WithOperationResult()
+    {
+        var svc = new Mock<IAuthService>();
+        svc.Setup(s => s.ToggleUserStatusAsync(5, It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new OperationResult { Success = true, Message = "User account deactivated" });
+        var controller = BuildController(svc);
+
+        var result = await controller.ToggleUserStatus(5, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<OperationResult>(ok.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task ToggleUserStatus_CallsAuthService_WithId()
+    {
+        var svc = new Mock<IAuthService>();
+        svc.Setup(s => s.ToggleUserStatusAsync(7, It.IsAny<CancellationToken>()))
+           .ReturnsAsync(new OperationResult { Success = true });
+        var controller = BuildController(svc);
+
+        await controller.ToggleUserStatus(7, CancellationToken.None);
+
+        svc.Verify(s => s.ToggleUserStatusAsync(7, CancellationToken.None), Times.Once);
+    }
 }

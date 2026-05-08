@@ -43,65 +43,65 @@ services:
       - tickethub-network
     restart: unless-stopped
 
-  # movie-service:
-  #   build:
-  #     context: ./movie-service/movie_service
-  #     dockerfile: Dockerfile
-  #   container_name: movie-service
-  #   ports:
-  #     - "5003:5003"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Development
-  #     - ASPNETCORE_URLS=http://+:5003
-  #     - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=movies_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - tickethub-network
-  #   restart: unless-stopped
+  movie-service:
+    build:
+      context: ./movie-service/movie_service
+      dockerfile: Dockerfile
+    container_name: movie-service
+    ports:
+      - "5003:5003"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5003
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=movies_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tickethub-network
+    restart: unless-stopped
 
-  # train-service:
-  #   build:
-  #     context: ./train-service/train_service
-  #     dockerfile: Dockerfile
-  #   container_name: train-service
-  #   ports:
-  #     - "5002:5002"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Development
-  #     - ASPNETCORE_URLS=http://+:5002
-  #     - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=trains_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - tickethub-network
-  #   restart: unless-stopped
+  train-service:
+    build:
+      context: ./train-service/train_service
+      dockerfile: Dockerfile
+    container_name: train-service
+    ports:
+      - "5002:5002"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5002
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=trains_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tickethub-network
+    restart: unless-stopped
 
-  # admin-bff:
-  #   build:
-  #     context: ./admin-bff/admin_bff
-  #     dockerfile: Dockerfile
-  #   container_name: admin-bff
-  #   ports:
-  #     - "5004:5004"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Development
-  #     - ASPNETCORE_URLS=http://+:5004
-  #     - ServiceEndpoints__IdentityServiceUrl=http://identity-service:5001
-  #     - ServiceEndpoints__TrainServiceUrl=http://train-service:5002
-  #     - ServiceEndpoints__MovieServiceUrl=http://movie-service:5003
-  #     - JwtSettings__Issuer=${JWT_ISSUER}
-  #     - JwtSettings__Audience=${JWT_AUDIENCE}
-  #     - JwtSettings__SecretKey=${JWT_SECRET_KEY}
-  #   depends_on:
-  #     - identity-service
-  #     - movie-service
-  #     - train-service
-  #   networks:
-  #     - tickethub-network
-  #   restart: unless-stopped
+  admin-bff:
+    build:
+      context: ./admin-bff/admin_bff
+      dockerfile: Dockerfile
+    container_name: admin-bff
+    ports:
+      - "5004:5004"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5004
+      - ServiceEndpoints__IdentityServiceUrl=http://identity-service:5001
+      - ServiceEndpoints__TrainServiceUrl=http://train-service:5002
+      - ServiceEndpoints__MovieServiceUrl=http://movie-service:5003
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
+    depends_on:
+      - identity-service
+      - movie-service
+      - train-service
+    networks:
+      - tickethub-network
+    restart: unless-stopped
 
   api-gateway:
     build:
@@ -119,9 +119,9 @@ services:
       - JwtSettings__TokenExpiryMinutes=60
     depends_on:
       - identity-service
-      # - movie-service
-      # - train-service
-      # - admin-bff
+      - movie-service
+      - train-service
+      - admin-bff
     networks:
       - tickethub-network
     restart: unless-stopped

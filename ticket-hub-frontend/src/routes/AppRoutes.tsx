@@ -6,9 +6,14 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { PlaceholderServicePage } from '@/pages/PlaceholderServicePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
+import { AdminMoviesPage } from '@/pages/AdminMoviesPage';
+import { AdminTrainsPage } from '@/pages/AdminTrainsPage';
+import { AdminUsersPage } from '@/pages/AdminUsersPage';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute';
+import { AdminRoute } from '@/routes/AdminRoute';
 import { useAuth } from '@/hooks/useAuth';
 
 function LogoutPage() {
@@ -54,6 +59,15 @@ export function AppRoutes() {
               />
             }
           />
+        </Route>
+      </Route>
+
+      <Route element={<AdminRoute />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="/admin/movies" element={<AdminMoviesPage />} />
+          <Route path="/admin/trains" element={<AdminTrainsPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
         </Route>
       </Route>
 

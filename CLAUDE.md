@@ -4,62 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-.NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains + admin), plus a React frontend. **`admin-bff`, `movie-service`, and `train-service` have had their source intentionally stripped** (commit `368d3b8`) — only `Program.cs`, `*.csproj`, `appsettings*.json`, and `Dockerfile` survive. Those three services will not compile. When asked to work on them, treat the surviving `Program.cs` as the contract spec and reconstruct from it using `identity-service` as the canonical reference implementation.
-
-Only `identity-service`, `api-gateway`, and `ticket-hub-frontend` are fully implemented.
+.NET 8 microservices monorepo for a multi-domain ticketing platform (movies + trains + admin), plus a React frontend. **All six services are fully implemented and compile.** Use `identity-service` as the canonical reference implementation when adding features to other services.
 
 ## Common commands
 
 ### Docker (run from repo root)
 
 ```bash
-cp .env.example .env                                          # JWT_SECRET_KEY must be ≥ 32 chars
-docker-compose up postgres identity-service api-gateway       # only services that compile today
-docker-compose up --build                                     # full stack
-docker-compose down -v                                        # also drops the postgres volume
+cp .env.example .env              # JWT_SECRET_KEY must be ≥ 32 chars
+docker-compose up --build         # full stack (all 6 services + postgres)
+docker-compose down -v            # tear down and drop postgres volume
 ```
 
 ### .NET services
 
-Each service has its own `.slnx` file. Build and test commands must target the `.csproj` directly (dotnet 8 does not support `.slnx` via `dotnet build`):
+Build and test commands must target the `.csproj` directly (`.slnx` files are not supported by `dotnet build`). Run from repo root:
 
 ```bash
+# Build
 dotnet build identity-service/identity_service/Src/IdentityService.Endpoints/IdentityService.Endpoints.csproj
+dotnet build movie-service/movie_service/Src/MovieService.Endpoints/MovieService.Endpoints.csproj
+dotnet build train-service/train_service/Src/TrainService.Endpoints/TrainService.Endpoints.csproj
+dotnet build admin-bff/admin_bff/Src/AdminBFF.Endpoints/AdminBFF.Endpoints.csproj
 dotnet build api-gateway/api_gateway/Src/ApiGateway/ApiGateway.csproj
 
-dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj
-dotnet test api-gateway/api_gateway/Tests/ApiGateway.Tests/ApiGateway.Tests.csproj
-
-# Filter to a single class or name pattern
-dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
-  --filter "FullyQualifiedName~AuthServiceTests"
-dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
-  --filter "DisplayName~Login"
-
-# Skip Testcontainer tests that require Docker
+# Test — unit only (no Docker needed)
 dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
   --filter "FullyQualifiedName!~RepositoryTests"
+dotnet test movie-service/movie_service/Tests/MovieService.Tests/MovieService.Tests.csproj \
+  --filter "FullyQualifiedName!~RepositoryTests"
+dotnet test train-service/train_service/Tests/TrainService.Tests/TrainService.Tests.csproj \
+  --filter "FullyQualifiedName!~RepositoryTests"
+dotnet test admin-bff/admin_bff/Tests/AdminBFF.Tests/AdminBFF.Tests.csproj
 
-# Run only repository (Testcontainer) tests — Docker must be running
+# Test — repository tests only (requires Docker / Colima running)
 dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
   --filter "FullyQualifiedName~RepositoryTests"
+dotnet test movie-service/movie_service/Tests/MovieService.Tests/MovieService.Tests.csproj \
+  --filter "FullyQualifiedName~RepositoryTests"
+dotnet test train-service/train_service/Tests/TrainService.Tests/TrainService.Tests.csproj \
+  --filter "FullyQualifiedName~RepositoryTests"
 
-# Run locally without Docker (needs Postgres on 5435 + .env vars exported)
-dotnet run --project identity-service/identity_service/Src/IdentityService.Endpoints
+# Filter to a single class or method
+dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
+  --filter "FullyQualifiedName~AuthServiceTests"
 ```
 
-### EF Core migrations (identity-service only, run from `identity-service/identity_service/`)
+### EF Core migrations (run from each service's root directory)
 
 ```bash
-dotnet ef migrations add <Name> \
-  --project Src/IdentityService.Core \
-  --startup-project Src/IdentityService.Endpoints
-dotnet ef database update \
-  --project Src/IdentityService.Core \
-  --startup-project Src/IdentityService.Endpoints
+# identity-service
+cd identity-service/identity_service
+dotnet ef migrations add <Name> --project Src/IdentityService.Core --startup-project Src/IdentityService.Endpoints
+
+# movie-service
+cd movie-service/movie_service
+dotnet ef migrations add <Name> --project Src/MovieService.Core --startup-project Src/MovieService.Endpoints
+
+# train-service
+cd train-service/train_service
+dotnet ef migrations add <Name> --project Src/TrainService.Core --startup-project Src/TrainService.Endpoints
 ```
 
-Migrations also run automatically at startup via `dbContext.Database.Migrate()`.
+Migrations run automatically at startup via `context.Database.Migrate()`. admin-bff has no database.
 
 ### Frontend
 
@@ -68,7 +75,7 @@ cd ticket-hub-frontend
 cp .env.example .env   # sets VITE_API_URL=http://localhost:5000
 npm install
 npm run dev            # http://localhost:5173
-npm run lint           # tsc type-check only (no ESLint) — note: vite.config.ts has a pre-existing TS2769 error unrelated to app code
+npm run lint           # tsc type-check only (no ESLint) — vite.config.ts has a pre-existing TS2769 error unrelated to app code
 npm test               # vitest run (single pass)
 npm run test:watch     # vitest watch mode
 ```
@@ -77,39 +84,44 @@ npm run test:watch     # vitest watch mode
 
 ### Service layout and ports
 
-| Service | Port | Role |
-|---|---|---|
-| `api-gateway` | 5000 | YARP reverse proxy + JWT validation edge |
-| `identity-service` | 5001 | Auth, users, JWT issuance |
-| `train-service` | 5002 | Train domain (stripped) |
-| `movie-service` | 5003 | Movie domain (stripped) |
-| `admin-bff` | 5004 | Admin BFF, fans out to domain services (stripped) |
-| `postgres` | host 5435 → 5432 | Single Postgres 17 instance, three logical DBs |
-| `ticket-hub-frontend` | 5173 (dev) | React + TypeScript + Tailwind SPA |
+| Service | Port | DB schema | Role |
+|---|---|---|---|
+| `api-gateway` | 5000 | — | YARP reverse proxy + JWT validation edge |
+| `identity-service` | 5001 | `identity` | Auth, users, JWT issuance |
+| `train-service` | 5002 | `trains` | Train schedules + seat availability |
+| `movie-service` | 5003 | `movies` | Movie catalog |
+| `admin-bff` | 5004 | — | Admin BFF; no DB — fans out via HTTP to downstream services |
+| `postgres` | host 5435 → 5432 | — | Single Postgres 17 instance, three logical DBs |
+| `ticket-hub-frontend` | 5173 (dev) | — | React + TypeScript + Tailwind SPA |
 
 `postgres/init.sql` creates `identity_db`, `movies_db`, `trains_db` on first container start.
 
 ### Request flow
 
-The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000`). The gateway handles two route types:
+The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000`). Route types:
 
-1. **REST pass-through** — `/api/auth/{**catch-all}` → `identity-service:5001/api/auth` (no path rewrite). Public endpoints (`/login`, `/register`, `/forgot-password`, `/reset-password`) are whitelisted in `JwtValidationMiddleware`; `/api/auth/profile` requires a valid JWT.
+1. **REST pass-through** — `/api/auth/{**catch-all}` → `identity-service:5001`. Public: `/login`, `/register`, `/forgot-password`, `/reset-password`. Admin-only: `GET /api/auth/users`, `PUT /api/auth/users/{id}/toggle-status`.
 
-2. **GraphQL proxy** — path prefixes rewritten to `/graphql` on the upstream:
+2. **Admin REST** — `/api/admin/{**catch-all}` → `admin-bff:5004`. Requires valid JWT + `role == "Admin"` (enforced at gateway). Controllers: `AdminMovieController`, `AdminTrainController`, `AdminUserController`.
+
+3. **GraphQL proxy** — path prefix rewritten to `/graphql` on the upstream:
    - `/graphql/auth/**` → `identity-service:5001/graphql`
    - `/graphql/trains/**` → `train-service:5002/graphql`
    - `/graphql/movies/**` → `movie-service:5003/graphql`
-   - `/graphql/admin/**` → `admin-bff:5004/graphql`
+   - `/graphql/admin/**` → `admin-bff:5004/graphql` — requires `role == "Admin"`
 
-`JwtValidationMiddleware` in the gateway whitelists `/graphql/auth`, `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/health`, and `/`. All other paths require a Bearer JWT. Admin GraphQL routes additionally require `role == "Admin"`.
+`JwtValidationMiddleware` in the gateway enforces auth on all paths except the public whitelist. Admin role is required for `/graphql/admin/**` and `/api/admin/**`.
 
-### GraphQL + REST split
+### Admin BFF architecture
 
-Convention across all services: **GraphQL (HotChocolate 13.9.14) handles reads; writes go through REST controllers**.
-- Reads → `GraphQL/Query.cs` — use `[UseFiltering]` and `[UseSorting]` on list queries that return `IQueryable<T>` from the repository's `Query()` method.
-- Writes → `[ApiController]` actions under `Controllers/`
+`admin-bff` is a pure HTTP aggregation layer — **no database**. It:
+- Validates the incoming Admin JWT
+- Has three `IHttpClientFactory`-backed service clients: `IdentityServiceClient`, `MovieServiceClient`, `TrainServiceClient`
+- GraphQL (`Query.cs`) reads aggregate data from all three downstream services
+- REST controllers proxy writes to the appropriate downstream service
+- Forwards the Bearer token to identity-service calls (that endpoint validates Admin role independently); movie/train service endpoints are internal-only (no auth)
 
-All GraphQL queries in identity-service require `[Authorize]`.
+`ServiceEndpoints` config section (bound to `ServiceEndpointOptions`) controls downstream URLs. Docker uses container hostnames; dev uses `localhost`.
 
 ### .NET service-internal layout
 
@@ -117,94 +129,104 @@ All GraphQL queries in identity-service require `[Authorize]`.
 <service>/<service>_service/
   Src/
     <Service>.Core/
-      Data/              DbContext + Migrations (schema: "identity")
+      Data/              DbContext + Migrations
       DTOs/              Plain request/response types — no validation annotations
       Exceptions/        ConflictException (409), NotFoundException (404)
       Extensions/        CoreServiceExtensions.AddCoreServices() — all DI wired here
-      Mapping/           AutoMapper profiles (User → UserType)
+      Mapping/           AutoMapper profiles
       Models/            EF Core entities
       Repositories/      IBaseRepository<T>, BaseRepository<T>, domain-specific interfaces
-      Services/          IAuthService (facade) + 3 sub-services + IJwtService + IAuditService
-      Validators/        FluentValidation AbstractValidator<T> — one per input DTO
+      Services/          Service interfaces + implementations
+      Validators/        FluentValidation AbstractValidator<T> — one per DTO
     <Service>.Endpoints/
-      Controllers/       REST endpoints — thin, delegate to IAuthService
-      GraphQL/Query.cs   HotChocolate queries
+      Controllers/       REST endpoints — thin, delegate to service
+      GraphQL/Query.cs   HotChocolate reads
       Middleware/        GlobalExceptionMiddleware, CorrelationIdMiddleware
-      Program.cs         Calls builder.Services.AddCoreServices(config) then wires JWT/GraphQL/CORS
+      Program.cs         AddCoreServices(config), JWT/GraphQL/CORS wiring
   Tests/
-    <Service>.Tests/     xUnit + Moq + FluentAssertions + Bogus
-      Controllers/       Moq IAuthService; pass CancellationToken.None explicitly
-      GraphQL/           Moq IAuthService + IUserRepository
+    <Service>.Tests/
+      Controllers/       Mock service; pass CancellationToken.None explicitly
+      Services/          EF InMemory (BuildFullService) + Moq (BuildMocked) + Bogus
+      Models/            FluentValidation TestHelper (TestValidate/ShouldHaveValidationErrorFor)
+      Repositories/      Testcontainers PostgreSQL
       Middleware/
-      Models/            FluentValidation TestHelper (TestValidate / ShouldHaveValidationErrorFor)
-      Repositories/      Testcontainers PostgreSQL — requires Docker to be running
-      Services/          EF InMemory for workflow tests; Moq for unit tests; Bogus for test data
 ```
 
-### Testcontainers setup
+### Domain models
 
-Repository tests use Testcontainers with a shared `PostgresFixture` (one container per test run via `[Collection("postgres")]`). Key details:
+**identity-service — `User`**: Id, Email, PasswordHash, FullName, PhoneNumber, Role (`"User"`|`"Admin"`), IsActive (default `true`), CreatedAt.
+- `IsActive = false` blocks login with `401 UNAUTHORIZED: "Account is deactivated"`
+- Default admin seeded on startup: `admin@email.com` / `admin` / role `Admin`
 
-- **Docker must be running** (Colima or Docker Desktop). This machine uses **Colima** — `DOCKER_HOST` is already exported to the Colima socket and `~/.testcontainers.properties` already contains `ryuk.disabled=true`. Just run `colima start` if Docker isn't responding.
-- `PostgresFixture` resolves the Docker endpoint from `DOCKER_HOST` automatically (falls back to `/var/run/docker.sock`), so it works with both Colima and Docker Desktop without any code changes.
-- `TestContainerExtensions.WaitForPort` (in `Tests/Repositories/`) polls the mapped TCP port after `StartAsync` before calling `MigrateAsync`. This is required because Testcontainers v4 reports the container ready before PostgreSQL accepts external TCP connections.
-- `PostgreSqlBuilder()` emits a CS0618 deprecation warning in Testcontainers v4.11 — known issue, does not affect test runs.
-- `xunit.runner.json` disables parallel test collections so Testcontainer tests don't race with in-memory tests in the same run.
+**movie-service — `Movie`**: Id, Title, Genre, Duration (minutes), PosterUrl, IsActive (default `true`), CreatedAt. 5 seed movies.
 
-For setting up repository tests in a newly reconstructed service, see `REPOSITORY_TESTS_SETUP.md` at the repo root.
+**train-service — `Train`**: Id, TrainName, TrainNumber (unique), Source, Destination, DepartureTime (**must be UTC** — use `DateTime.SpecifyKind(..., DateTimeKind.Utc)` before persisting), CreatedAt. 3 seed trains.
+**train-service — `SeatAvailability`**: Id, TrainId (FK), Date (DateOnly), AvailableSeats. Upserted by (TrainId, Date) — one row per train+date.
 
 ### DI registration pattern
 
-`Program.cs` calls a single extension method that owns all Core registrations:
+Every service's `Program.cs` delegates all Core registrations to a single extension method:
 
 ```csharp
 builder.Services.AddCoreServices(builder.Configuration);
-// wires: DbContext, Repositories, sub-services, AuthService (facade), JwtService,
-//        AuditService, FluentValidation validators, AutoMapper
+// wires: DbContext, Repositories, Services, FluentValidation validators, AutoMapper
 ```
 
-The sub-service Facade pattern for `IAuthService`:
-- `IAuthService` (public contract used by controllers and GraphQL) is implemented by `AuthService`, which delegates to:
-  - `IAuthenticationService` — Register, Login
-  - `IUserAccountService` — UpdateProfile, GetUserById, GetAllUsers, GetUserCount
-  - `IPasswordService` — ForgotPassword, ResetPassword
+admin-bff registers typed HttpClients instead of DbContext/repos:
 
-`JwtService` reads all JWT config from `IConfiguration` in its **constructor** (stored as private fields). Do not re-read config inside individual methods.
+```csharp
+builder.Services.AddHttpClient<IIdentityService, IdentityServiceClient>(client => ...);
+builder.Services.AddHttpClient<IMovieService, MovieServiceClient>(client => ...);
+builder.Services.AddHttpClient<ITrainService, TrainServiceClient>(client => ...);
+```
 
 ### Validation and error handling
 
-- **Input validation** — FluentValidation validators (in `Core/Validators/`) are injected into sub-services and called with `ValidateAndThrowAsync`. DTOs carry no annotation-based constraints.
-- `GlobalExceptionMiddleware` maps: `ValidationException` → 400 `VALIDATION_ERROR`, `ConflictException` → 409 `EMAIL_EXISTS`, `NotFoundException` → 404 `NOT_FOUND`, `UnauthorizedAccessException` → 401 `UNAUTHORIZED`.
-- Never throw `InvalidOperationException` for expected domain errors — use `ConflictException` or `NotFoundException`.
+- `ValidateAndThrowAsync` (FluentValidation) called in service methods, not controllers
+- `GlobalExceptionMiddleware` maps: `ValidationException` → 400, `ConflictException` → 409, `NotFoundException` → 404, `UnauthorizedAccessException` → 401
+- Use `ConflictException`/`NotFoundException` for domain errors, never `InvalidOperationException`
+
+### Testcontainers setup
+
+Repository tests share one Postgres container via `[Collection("postgres")]` + `PostgresFixture`. Per service:
+- `PostgresFixture.cs` starts the container, calls `WaitForPort`, then `MigrateAsync`
+- `TestContainerExtensions.WaitForPort` polls TCP before migration — required because Testcontainers v4 marks ready before Postgres accepts connections
+- `xunit.runner.json` sets `"parallelizeTestCollections": false`
+- Uses `DOCKER_HOST` env var (falls back to `/var/run/docker.sock`) — works with both Colima and Docker Desktop. Run `colima start` if Docker isn't responding.
+- `PostgreSqlBuilder()` emits CS0618 deprecation warning in Testcontainers v4.11 — known, harmless
 
 ### Cross-service auth
 
-JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `identity-service` (issues), `api-gateway` (validates at edge), and `admin-bff` (validates for direct calls). All three read from the same env vars in `docker-compose.yml`. Drift between any of these three breaks all protected routes. `appsettings.json` files contain a placeholder secret; always override via environment.
+`JwtSettings__SecretKey`, `Issuer`, `Audience` are shared by `identity-service`, `api-gateway`, and `admin-bff`. All three read from the same env vars in `docker-compose.yml`. `appsettings.json` contains a placeholder; always override via environment.
 
 ### Frontend architecture
 
 `ticket-hub-frontend/src/`:
-- **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage`), `ToastContext`
-- **`services/api/client.ts`** — Axios instance; request interceptor injects Bearer token; response interceptor clears storage and redirects to `/auth` on 401
-- **`services/graphql/apolloClient.ts`** — Apollo Client v4 instance; `authLink` injects Bearer token; wraps the app via `ApolloProvider` in `App.tsx`
-- **`routes/`** — `ProtectedRoute` (redirects unauthenticated to `/auth`), `PublicOnlyRoute` (redirects authenticated to `/dashboard`)
-- **`pages/`** — `AuthPage` (sign-in / sign-up / forgot-password in one view), `DashboardPage`, `ProfilePage`, `ResetPasswordPage`, `PlaceholderServicePage`
+- **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage`), `ToastContext` (`.success()`, `.error()`, `.info()` — not `showToast`)
+- **`services/api/client.ts`** — Axios instance; auto-injects Bearer token; redirects to `/auth` on 401
+- **`services/api/adminApi.ts`** — All admin REST mutations (`/api/admin/movies`, `/api/admin/trains`, `/api/admin/users`)
+- **`services/graphql/apolloClient.ts`** — Apollo Client v4; points to `/graphql/auth`; wraps app in `App.tsx`
+- **`services/graphql/adminApolloClient.ts`** — Separate Apollo Client v4 instance pointing to `/graphql/admin`; used inside admin pages wrapped in their own `<ApolloProvider>`
+- **`routes/`** — `ProtectedRoute` (redirects unauthenticated), `PublicOnlyRoute`, `AdminRoute` (requires `user.role === 'Admin'`; redirects non-admins to `/dashboard`)
+- **`pages/`** — `AuthPage`, `DashboardPage` (shows Admin Panel card when `role === 'Admin'`), `ProfilePage`, admin pages: `AdminDashboardPage`, `AdminMoviesPage`, `AdminTrainsPage`, `AdminUsersPage`
 
-All forms (auth and profile) use **React Hook Form** with **Zod** schemas via `zodResolver`. Each form file contains its own co-located `z.object({...})` schema. The `Input` component uses `forwardRef`, so `{...register('fieldName')}` spreads directly onto it.
+**Admin pages** use `<ApolloProvider client={adminApolloClient}>` at the page root. `useQuery` and `ApolloProvider` are imported from `@apollo/client/react` (not `@apollo/client`). GraphQL `data` is untyped — cast via `(data as any)?.fieldName`. Toast calls use `.success()` / `.error()` directly from `useToast()`.
 
-`ForgotPasswordResponse.ResetToken` is only echoed back in Development; the frontend captures it from the API response and forwards it to `/reset-password?token=...` as a dev convenience.
+**React Hook Form + Zod**: use `{ valueAsNumber: true }` in `register()` for numeric inputs instead of `z.coerce.number()` (Zod v4 coerce produces `unknown` type, breaking the resolver).
+
+**`DateTime` fields** from `datetime-local` inputs arrive as strings like `"2026-05-15T08:00"` with `DateTimeKind.Unspecified`. Before persisting to Postgres `timestamptz` columns, always call `DateTime.SpecifyKind(value, DateTimeKind.Utc)`.
 
 ### Frontend test setup
 
-Uses **Vitest + React Testing Library**. Test files are **co-located** next to their source files (e.g., `SignInForm.test.tsx` beside `SignInForm.tsx`). Shared helpers in `src/test/`:
+Tests are **co-located** next to source files. Shared helpers in `src/test/`:
 - `setup.ts` — imports `@testing-library/jest-dom`
-- `utils.tsx` — exports `TestRouter` (a `MemoryRouter` with React Router v7 future flags)
+- `utils.tsx` — exports `TestRouter` (MemoryRouter with RR v7 future flags)
 
-Mocking pattern: `vi.hoisted(() => vi.fn())` for functions referenced inside `vi.mock` factories.
+Mocking: `vi.hoisted(() => vi.fn())` for values referenced inside `vi.mock` factories. Different `vi.mock` values per test suite require separate test files (module-level mock applies to all tests in a file).
 
 ## Feature implementation reference
 
-When implementing any new feature — entity, repository, service, endpoint, GraphQL query, or frontend component — always consult `dotnet-architecture-reference.md` at the repo root first. It is the authoritative blueprint for this codebase and defines the exact patterns to follow: layered project structure, Repository/Facade/Strategy patterns, FluentValidation setup, AutoMapper profiles, DI registration via extension methods, HotChocolate GraphQL conventions, Testcontainers integration tests, Bogus test data, and React Hook Form + Zod frontend forms.
+Always consult `dotnet-architecture-reference.md` at the repo root before adding new entities, repositories, services, endpoints, GraphQL queries, or frontend components. It defines the exact patterns for this codebase.
 
 ## Workflow rules
 

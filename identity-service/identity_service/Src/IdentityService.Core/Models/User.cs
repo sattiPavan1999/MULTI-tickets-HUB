@@ -39,4 +39,9 @@ public class User
     /// Account creation timestamp
     /// </summary>
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Whether the account is active; deactivated users cannot log in
+    /// </summary>
+    public bool IsActive { get; set; } = true;
 }

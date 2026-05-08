@@ -20,9 +20,16 @@ const TrainIcon = () => (
   </svg>
 );
 
+const ShieldIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
 export function DashboardPage() {
   const { user } = useAuth();
   const firstName = user?.fullName?.split(' ')[0] ?? 'there';
+  const isAdmin = user?.role === 'Admin';
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center gap-12 py-10 sm:py-14">
@@ -53,6 +60,15 @@ export function DashboardPage() {
           icon={<TrainIcon />}
           accent="teal"
         />
+        {isAdmin && (
+          <ServiceCard
+            title="Admin Panel"
+            description="Manage movies, trains, and users. Full platform control in one place."
+            href="/admin"
+            icon={<ShieldIcon />}
+            accent="crimson"
+          />
+        )}
       </div>
     </div>
   );

@@ -8,4 +8,5 @@ public interface IUserAccountService
     Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input, CancellationToken ct = default);
     Task<List<UserType>> GetAllUsersAsync(CancellationToken ct = default);
     Task<int> GetUserCountAsync(CancellationToken ct = default);
+    Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default);
 }

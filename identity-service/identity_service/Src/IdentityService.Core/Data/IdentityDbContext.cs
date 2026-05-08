@@ -61,6 +61,10 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
             entity.Property(e => e.CreatedAt)
                 .IsRequired()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.IsActive)
+                .IsRequired()
+                .HasDefaultValue(true);
         });
 
         modelBuilder.Entity<PasswordResetToken>(entity =>

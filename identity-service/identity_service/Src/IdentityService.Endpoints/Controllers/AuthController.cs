@@ -56,4 +56,20 @@ public class AuthController(IAuthService authService) : ControllerBase
         var response = await authService.ResetPasswordAsync(input, ct);
         return Ok(response);
     }
+
+    [HttpGet("users")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<UserType>>> GetAllUsers(CancellationToken ct)
+    {
+        var users = await authService.GetAllUsersAsync(ct);
+        return Ok(users);
+    }
+
+    [HttpPut("users/{id:int}/toggle-status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id, CancellationToken ct)
+    {
+        var result = await authService.ToggleUserStatusAsync(id, ct);
+        return Ok(result);
+    }
 }

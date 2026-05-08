@@ -30,4 +30,7 @@ public class AuthService(
 
     public Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input, CancellationToken ct = default)
         => passwordService.ResetPasswordAsync(input, ct);
+
+    public Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default)
+        => userAccountService.ToggleUserStatusAsync(userId, ct);
 }

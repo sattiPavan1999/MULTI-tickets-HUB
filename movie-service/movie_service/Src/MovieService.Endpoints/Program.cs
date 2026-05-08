@@ -1,84 +1,44 @@
-using Microsoft.EntityFrameworkCore;
+using MovieService.Core;
 using MovieService.Core.Data;
+using MovieService.Core.Extensions;
 using MovieService.Endpoints.GraphQL.Queries;
 using MovieService.Endpoints.Middleware;
-using MovieService.Core.Repositories;
-using MovieService.Core.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database configuration
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+builder.Services.AddCoreServices(builder.Configuration);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-// Repository registration
-builder.Services.AddScoped<IMovieRepository, MovieRepository>();
-builder.Services.AddScoped<IShowRepository, ShowRepository>();
-builder.Services.AddScoped<ISeatRepository, SeatRepository>();
-builder.Services.AddScoped<IBookingRepository, BookingRepository>();
-
-// Service registration
-builder.Services.AddScoped<IMovieService, MovieServiceImpl>();
-builder.Services.AddScoped<IShowService, ShowServiceImpl>();
-builder.Services.AddScoped<ISeatService, SeatServiceImpl>();
-builder.Services.AddScoped<IBookingService, BookingServiceImpl>();
-
-// GraphQL configuration (queries only — writes go through REST controllers)
 builder.Services
     .AddGraphQLServer()
-    .AddQueryType<Query>();
+    .AddQueryType<Query>()
+    .AddFiltering()
+    .AddSorting();
 
-// CORS configuration
 builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll",
-        policy => policy
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
-});
-
-// Logging
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var app = builder.Build();
 
-// Apply migrations and seed data
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<AppDbContext>();
-        context.Database.Migrate();
-        SeedData.Initialize(context);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
-    }
+    var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
+    context.Database.Migrate();
+    SeedData.Initialize(context);
 }
 
-// Configure the HTTP request pipeline
+app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseMiddleware<GlobalExceptionMiddleware>();
-
 app.UseCors("AllowAll");
-
-app.UseRouting();
 
 app.MapControllers();
 app.MapGraphQL("/graphql");

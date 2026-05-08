@@ -54,6 +54,13 @@ public class AuthenticationService(
             throw new UnauthorizedAccessException("Invalid credentials");
         }
 
+        if (!user.IsActive)
+        {
+            logger.LogWarning("Login attempt on deactivated account: {Email}", input.Email);
+            await auditService.LogAsync($"Login blocked — account deactivated: {input.Email}");
+            throw new UnauthorizedAccessException("Account is deactivated");
+        }
+
         var token = jwtService.GenerateToken(user);
         await auditService.LogAsync($"User logged in: {user.Email}");
 
