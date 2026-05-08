@@ -40,7 +40,7 @@ dotnet test identity-service/identity_service/Tests/IdentityService.Tests/Identi
 dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
   --filter "FullyQualifiedName!~RepositoryTests"
 
-# Run only repository (Testcontainer) tests — Docker Desktop must be open
+# Run only repository (Testcontainer) tests — Docker must be running
 dotnet test identity-service/identity_service/Tests/IdentityService.Tests/IdentityService.Tests.csproj \
   --filter "FullyQualifiedName~RepositoryTests"
 
@@ -68,7 +68,7 @@ cd ticket-hub-frontend
 cp .env.example .env   # sets VITE_API_URL=http://localhost:5000
 npm install
 npm run dev            # http://localhost:5173
-npm run lint           # tsc type-check only (no ESLint)
+npm run lint           # tsc type-check only (no ESLint) — note: vite.config.ts has a pre-existing TS2769 error unrelated to app code
 npm test               # vitest run (single pass)
 npm run test:watch     # vitest watch mode
 ```
@@ -137,21 +137,21 @@ All GraphQL queries in identity-service require `[Authorize]`.
       GraphQL/           Moq IAuthService + IUserRepository
       Middleware/
       Models/            FluentValidation TestHelper (TestValidate / ShouldHaveValidationErrorFor)
-      Repositories/      Testcontainers PostgreSQL — requires Docker Desktop to be running
+      Repositories/      Testcontainers PostgreSQL — requires Docker to be running
       Services/          EF InMemory for workflow tests; Moq for unit tests; Bogus for test data
 ```
 
 ### Testcontainers setup
 
-Repository tests use Testcontainers with a shared `PostgresFixture` (one container per test run via `[Collection("postgres")]`). Key requirements:
+Repository tests use Testcontainers with a shared `PostgresFixture` (one container per test run via `[Collection("postgres")]`). Key details:
 
-- **Docker Desktop must be open** before running repository tests. Testcontainers connects via `/var/run/docker.sock`, which is Docker Desktop's socket on this machine.
-- If running with **Colima only** (without Docker Desktop), export `DOCKER_HOST` before running tests:
-  ```bash
-  export DOCKER_HOST=unix:///Users/pavansainadhareddysatti/.colima/default/docker.sock
-  ```
-  and ensure `~/.testcontainers.properties` contains `ryuk.disabled=true`.
+- **Docker must be running** (Colima or Docker Desktop). This machine uses **Colima** — `DOCKER_HOST` is already exported to the Colima socket and `~/.testcontainers.properties` already contains `ryuk.disabled=true`. Just run `colima start` if Docker isn't responding.
+- `PostgresFixture` resolves the Docker endpoint from `DOCKER_HOST` automatically (falls back to `/var/run/docker.sock`), so it works with both Colima and Docker Desktop without any code changes.
+- `TestContainerExtensions.WaitForPort` (in `Tests/Repositories/`) polls the mapped TCP port after `StartAsync` before calling `MigrateAsync`. This is required because Testcontainers v4 reports the container ready before PostgreSQL accepts external TCP connections.
+- `PostgreSqlBuilder()` emits a CS0618 deprecation warning in Testcontainers v4.11 — known issue, does not affect test runs.
 - `xunit.runner.json` disables parallel test collections so Testcontainer tests don't race with in-memory tests in the same run.
+
+For setting up repository tests in a newly reconstructed service, see `REPOSITORY_TESTS_SETUP.md` at the repo root.
 
 ### DI registration pattern
 
@@ -168,6 +168,8 @@ The sub-service Facade pattern for `IAuthService`:
   - `IAuthenticationService` — Register, Login
   - `IUserAccountService` — UpdateProfile, GetUserById, GetAllUsers, GetUserCount
   - `IPasswordService` — ForgotPassword, ResetPassword
+
+`JwtService` reads all JWT config from `IConfiguration` in its **constructor** (stored as private fields). Do not re-read config inside individual methods.
 
 ### Validation and error handling
 
@@ -188,7 +190,7 @@ JWT settings (`JwtSettings__SecretKey`, `Issuer`, `Audience`) are shared by `ide
 - **`routes/`** — `ProtectedRoute` (redirects unauthenticated to `/auth`), `PublicOnlyRoute` (redirects authenticated to `/dashboard`)
 - **`pages/`** — `AuthPage` (sign-in / sign-up / forgot-password in one view), `DashboardPage`, `ProfilePage`, `ResetPasswordPage`, `PlaceholderServicePage`
 
-All forms (auth and profile) use **React Hook Form** with **Zod** schemas via `zodResolver`. Each form file contains its own co-located `z.object({...})` schema — do not reach for `utils/validation.ts` (removed). The `Input` component uses `forwardRef`, so `{...register('fieldName')}` spreads directly onto it.
+All forms (auth and profile) use **React Hook Form** with **Zod** schemas via `zodResolver`. Each form file contains its own co-located `z.object({...})` schema. The `Input` component uses `forwardRef`, so `{...register('fieldName')}` spreads directly onto it.
 
 `ForgotPasswordResponse.ResetToken` is only echoed back in Development; the frontend captures it from the API response and forwards it to `/reset-password?token=...` as a dev convenience.
 
