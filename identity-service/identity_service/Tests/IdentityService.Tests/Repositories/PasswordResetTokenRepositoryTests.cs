@@ -4,16 +4,13 @@ using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Testcontainers.PostgreSql;
 
 namespace IdentityService.Tests.Repositories;
 
+[Collection("postgres")]
 public class PasswordResetTokenRepositoryTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
-        .Build();
-
+    private readonly PostgresFixture _fixture;
     private IdentityDbContext _context = null!;
     private PasswordResetTokenRepository _repo = null!;
     private UserRepository _userRepo = null!;
@@ -26,25 +23,25 @@ public class PasswordResetTokenRepositoryTests : IAsyncLifetime
         .RuleFor(u => u.Role, _ => "User")
         .RuleFor(u => u.CreatedAt, _ => DateTime.UtcNow);
 
+    public PasswordResetTokenRepositoryTests(PostgresFixture fixture) => _fixture = fixture;
+
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
-
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
+            .UseNpgsql(_fixture.ConnectionString)
             .Options;
-
         _context = new IdentityDbContext(options);
-        await _context.Database.MigrateAsync();
+
+        // Clean data only — migrations already applied by the fixture (tokens first due to FK)
+        _context.PasswordResetTokens.RemoveRange(_context.PasswordResetTokens);
+        _context.Users.RemoveRange(_context.Users);
+        await _context.SaveChangesAsync();
+
         _userRepo = new UserRepository(_context, NullLogger<UserRepository>.Instance);
         _repo = new PasswordResetTokenRepository(_context, NullLogger<PasswordResetTokenRepository>.Instance);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _context.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _context.DisposeAsync();
 
     private async Task<User> SeedUserAsync()
     {

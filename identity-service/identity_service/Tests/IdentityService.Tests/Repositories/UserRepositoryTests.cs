@@ -4,16 +4,13 @@ using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Testcontainers.PostgreSql;
 
 namespace IdentityService.Tests.Repositories;
 
+[Collection("postgres")]
 public class UserRepositoryTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
-        .Build();
-
+    private readonly PostgresFixture _fixture;
     private IdentityDbContext _context = null!;
     private UserRepository _repo = null!;
 
@@ -24,24 +21,23 @@ public class UserRepositoryTests : IAsyncLifetime
         .RuleFor(u => u.PhoneNumber, f => f.Phone.PhoneNumber("+1##########"))
         .RuleFor(u => u.Role, _ => "User");
 
+    public UserRepositoryTests(PostgresFixture fixture) => _fixture = fixture;
+
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
-
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
+            .UseNpgsql(_fixture.ConnectionString)
             .Options;
-
         _context = new IdentityDbContext(options);
-        await _context.Database.MigrateAsync();
+
+        // Clean data only — migrations already applied by the fixture
+        _context.Users.RemoveRange(_context.Users);
+        await _context.SaveChangesAsync();
+
         _repo = new UserRepository(_context, NullLogger<UserRepository>.Instance);
     }
 
-    public async Task DisposeAsync()
-    {
-        await _context.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _context.DisposeAsync();
 
     // ── AddAsync ──────────────────────────────────────────────────────────────
 
@@ -173,7 +169,7 @@ public class UserRepositoryTests : IAsyncLifetime
         count.Should().Be(2);
     }
 
-    // ── Query() IQueryable ────────────────────────────────────────────────────
+    // ── Query() ───────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Query_CanFilterByEmail()
