@@ -29,6 +29,7 @@ public class PostgresFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
+        await _container.WaitForPort();
         ConnectionString = _container.GetConnectionString();
 
         // Apply migrations once — test classes only clean data, not re-migrate
