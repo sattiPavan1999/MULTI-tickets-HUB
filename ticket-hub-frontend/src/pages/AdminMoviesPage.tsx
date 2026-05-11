@@ -156,13 +156,12 @@ function ShowtimeModal({ movie, onClose }: { movie: MovieDto; onClose: () => voi
 }
 
 function AdminMoviesContent() {
-  const { data, loading, refetch } = useQuery(GET_ADMIN_MOVIES);
+  const { data, loading, refetch } = useQuery<{ movies: MovieDto[] }>(GET_ADMIN_MOVIES);
   const toast = useToast();
   const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; movie: MovieDto } | { mode: 'showtimes'; movie: MovieDto } | { mode: 'confirmDelete'; movie: MovieDto }>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const movies: MovieDto[] = (data as any)?.movies ?? [];
+  const movies: MovieDto[] = data?.movies ?? [];
 
   const handleCreate = async (formData: MovieFormData) => {
     setSubmitting(true);

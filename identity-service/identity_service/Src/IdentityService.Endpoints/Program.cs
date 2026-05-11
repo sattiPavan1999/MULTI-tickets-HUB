@@ -47,6 +47,13 @@ try
             opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
             opt.QueueLimit = 0;
         });
+        options.AddFixedWindowLimiter("password-reset", opt =>
+        {
+            opt.PermitLimit = 5;
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            opt.QueueLimit = 0;
+        });
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
 

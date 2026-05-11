@@ -26,10 +26,12 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let active = true;
     movieApi.getShowtimes(movie.id)
-      .then(setShowtimes)
-      .catch(() => toast.error('Failed to load showtimes'))
-      .finally(() => setLoadingShowtimes(false));
+      .then(data => { if (active) setShowtimes(data); })
+      .catch(() => { if (active) toast.error('Failed to load showtimes'); })
+      .finally(() => { if (active) setLoadingShowtimes(false); });
+    return () => { active = false; };
   }, [movie.id]);
 
   const handleSelectShowtime = async (showtime: ShowtimeDto) => {

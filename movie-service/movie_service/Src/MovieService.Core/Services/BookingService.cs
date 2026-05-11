@@ -49,7 +49,7 @@ public class BookingService(
                 UserId = input.UserId,
                 SeatNumbers = string.Join(",", input.SeatNumbers),
                 NumberOfSeats = input.SeatNumbers.Count,
-                Status = "Confirmed",
+                Status = BookingStatus.Confirmed,
                 BookedAt = DateTime.UtcNow
             };
 

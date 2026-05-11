@@ -1,4 +1,7 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using AdminBFF.Core.DTOs;
+using AdminBFF.Core.Exceptions;
 using AdminBFF.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +16,12 @@ public class AdminUserController(IIdentityService identityService, IHttpContextA
     [HttpPut("{id:int}/toggle-status")]
     public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id, CancellationToken ct)
     {
+        var callerIdClaim = httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContextAccessor.HttpContext?.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+        if (callerIdClaim is not null && int.TryParse(callerIdClaim, out var callerId) && callerId == id)
+            throw new ProxyException(409, "Administrators cannot toggle their own account status");
+
         var token = ExtractToken();
         var result = await identityService.ToggleUserStatusAsync(id, token, ct);
         return Ok(result);

@@ -18,13 +18,12 @@ interface UserRow {
 }
 
 function AdminUsersContent() {
-  const { data, loading, refetch } = useQuery(GET_ADMIN_USERS);
+  const { data, loading, refetch } = useQuery<{ users: UserRow[] }>(GET_ADMIN_USERS);
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [confirm, setConfirm] = useState<null | { userId: number; email: string; isActive: boolean }>(null);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const users: UserRow[] = (data as any)?.users ?? [];
+  const users: UserRow[] = data?.users ?? [];
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

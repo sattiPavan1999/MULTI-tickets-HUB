@@ -121,13 +121,12 @@ function SeatAvailabilityModal({ train, onClose }: { train: TrainDto; onClose: (
 }
 
 function AdminTrainsContent() {
-  const { data, loading, refetch } = useQuery(GET_ADMIN_TRAINS);
+  const { data, loading, refetch } = useQuery<{ trains: TrainDto[] }>(GET_ADMIN_TRAINS);
   const toast = useToast();
   const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; train: TrainDto } | { mode: 'seats'; train: TrainDto } | { mode: 'confirmDelete'; train: TrainDto }>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const trains: TrainDto[] = (data as any)?.trains ?? [];
+  const trains: TrainDto[] = data?.trains ?? [];
 
   // datetime-local inputs give local time strings; convert to UTC ISO for the backend
   const toUtcIso = (localInput: string) => localInput ? new Date(localInput).toISOString() : localInput;

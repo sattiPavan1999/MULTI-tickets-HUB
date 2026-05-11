@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MovieService.Core.DTOs;
 using MovieService.Core.Services;
@@ -11,9 +12,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     [HttpGet]
     public async Task<ActionResult<List<MovieResponse>>> GetAll([FromQuery] bool? activeOnly, CancellationToken ct)
     {
-        var movies = await movieService.GetAllMoviesAsync(ct);
-        if (activeOnly is true)
-            movies = movies.Where(m => m.IsActive).ToList();
+        var movies = await movieService.GetAllMoviesAsync(activeOnly, ct);
         return Ok(movies);
     }
 
@@ -26,6 +25,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<MovieResponse>> Create([FromBody] CreateMovieInput input, CancellationToken ct)
     {
         var movie = await movieService.CreateMovieAsync(input, ct);
@@ -33,6 +33,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<MovieResponse>> Update(int id, [FromBody] UpdateMovieInput input, CancellationToken ct)
     {
         var movie = await movieService.UpdateMovieAsync(id, input, ct);
@@ -40,6 +41,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         await movieService.DeleteMovieAsync(id, ct);
@@ -47,6 +49,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpPut("{id:int}/toggle-status")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<OperationResult>> ToggleStatus(int id, CancellationToken ct)
     {
         var result = await movieService.ToggleMovieStatusAsync(id, ct);
@@ -63,6 +66,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpPost("{movieId:int}/showtimes")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ShowtimeResponse>> CreateShowtime(int movieId, [FromBody] CreateShowtimeInput input, CancellationToken ct)
     {
         input.MovieId = movieId;
@@ -78,6 +82,7 @@ public class MovieController(IMovieService movieService, IShowtimeService showti
     }
 
     [HttpDelete("showtimes/{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteShowtime(int id, CancellationToken ct)
     {
         await showtimeService.DeleteShowtimeAsync(id, ct);

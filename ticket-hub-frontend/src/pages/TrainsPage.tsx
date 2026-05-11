@@ -22,10 +22,12 @@ export function TrainsPage() {
   const [selectedTrain, setSelectedTrain] = useState<TrainDto | null>(null);
 
   useEffect(() => {
+    let active = true;
     trainApi.searchTrains()
-      .then(setTrains)
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
+      .then(data => { if (active) setTrains(data); })
+      .catch(() => { if (active) setLoadError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const handleSearch = async (overrideSortBy?: SortBy) => {

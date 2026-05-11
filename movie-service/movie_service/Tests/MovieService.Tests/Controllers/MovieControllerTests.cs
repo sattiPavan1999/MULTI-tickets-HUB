@@ -41,7 +41,7 @@ public class MovieControllerTests
     public async Task GetAll_ReturnsOkWithMovies()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetAllMoviesAsync(It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.GetAllMoviesAsync(It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
            .ReturnsAsync([MakeResponse(), MakeResponse()]);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
@@ -53,14 +53,12 @@ public class MovieControllerTests
     }
 
     [Fact]
-    public async Task GetAll_ActiveOnly_FiltersInactiveMovies()
+    public async Task GetAll_ActiveOnly_PassesFlagToService()
     {
         var active = MakeResponse();
-        var inactive = MakeResponse();
-        inactive.IsActive = false;
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetAllMoviesAsync(It.IsAny<CancellationToken>()))
-           .ReturnsAsync([active, inactive]);
+        svc.Setup(s => s.GetAllMoviesAsync(true, It.IsAny<CancellationToken>()))
+           .ReturnsAsync([active]);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
         var result = await controller.GetAll(activeOnly: true, CancellationToken.None);
@@ -68,7 +66,7 @@ public class MovieControllerTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<MovieResponse>>(ok.Value);
         list.Should().HaveCount(1);
-        list[0].IsActive.Should().BeTrue();
+        svc.Verify(s => s.GetAllMoviesAsync(true, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ── GetById ───────────────────────────────────────────────────────────────

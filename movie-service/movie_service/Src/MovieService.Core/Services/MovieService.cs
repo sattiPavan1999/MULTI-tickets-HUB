@@ -15,9 +15,11 @@ public class MovieService(
     IMapper mapper,
     ILogger<MovieService> logger) : IMovieService
 {
-    public async Task<List<MovieResponse>> GetAllMoviesAsync(CancellationToken ct = default)
+    public async Task<List<MovieResponse>> GetAllMoviesAsync(bool? activeOnly = null, CancellationToken ct = default)
     {
         var movies = await movieRepository.GetAllAsync(ct);
+        if (activeOnly is true)
+            movies = movies.Where(m => m.IsActive).ToList();
         return mapper.Map<List<MovieResponse>>(movies);
     }
 

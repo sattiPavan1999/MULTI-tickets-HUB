@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TrainService.Core.DTOs;
 using TrainService.Core.Services;
@@ -6,6 +7,7 @@ namespace TrainService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/trains/bookings")]
+[Authorize]
 public class BookingController(ITrainBookingService bookingService) : ControllerBase
 {
     [HttpPost]
@@ -16,7 +18,7 @@ public class BookingController(ITrainBookingService bookingService) : Controller
 
         input.UserId = userId;
         var booking = await bookingService.CreateBookingAsync(input, ct);
-        return CreatedAtAction(nameof(GetById), new { id = booking.Id }, booking);
+        return StatusCode(201, booking);
     }
 
     [HttpDelete("{id:int}")]
@@ -25,7 +27,4 @@ public class BookingController(ITrainBookingService bookingService) : Controller
         var result = await bookingService.CancelBookingAsync(id, ct);
         return Ok(result);
     }
-
-    [HttpGet("{id:int}")]
-    public IActionResult GetById(int id) => Ok();
 }

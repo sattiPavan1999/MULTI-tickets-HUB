@@ -15,10 +15,12 @@ export function MoviesPage() {
   const [selectedMovie, setSelectedMovie] = useState<MovieDto | null>(null);
 
   useEffect(() => {
+    let active = true;
     movieApi.getMovies()
-      .then(setMovies)
+      .then(data => { if (active) setMovies(data); })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const genres = Array.from(new Set(movies.map((m) => m.genre))).sort();

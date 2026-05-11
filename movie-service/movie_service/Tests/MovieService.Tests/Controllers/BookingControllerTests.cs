@@ -41,7 +41,7 @@ public class BookingControllerTests
 
         var result = await controller.Create(input, CancellationToken.None);
 
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var created = Assert.IsType<ObjectResult>(result.Result);
         created.StatusCode.Should().Be(201);
     }
 

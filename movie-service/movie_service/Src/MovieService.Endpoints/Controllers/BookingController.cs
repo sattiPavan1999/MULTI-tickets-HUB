@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MovieService.Core.DTOs;
 using MovieService.Core.Services;
@@ -6,6 +7,7 @@ namespace MovieService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/movies/bookings")]
+[Authorize]
 public class BookingController(IBookingService bookingService) : ControllerBase
 {
     [HttpPost]
@@ -16,9 +18,6 @@ public class BookingController(IBookingService bookingService) : ControllerBase
 
         input.UserId = userId;
         var booking = await bookingService.CreateBookingAsync(input, ct);
-        return CreatedAtAction(nameof(GetById), new { id = booking.Id }, booking);
+        return StatusCode(201, booking);
     }
-
-    [HttpGet("{id:int}")]
-    public IActionResult GetById(int id) => Ok();
 }

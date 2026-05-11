@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
 using IdentityService.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -48,6 +49,7 @@ public class AuthController(
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("password-reset")]
     public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordInput input, CancellationToken ct)
     {
         var response = await passwordService.ForgotPasswordAsync(input, ct);
@@ -56,6 +58,7 @@ public class AuthController(
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("password-reset")]
     public async Task<ActionResult<OperationResult>> ResetPassword([FromBody] ResetPasswordInput input, CancellationToken ct)
     {
         var response = await passwordService.ResetPasswordAsync(input, ct);
@@ -74,6 +77,12 @@ public class AuthController(
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id, CancellationToken ct)
     {
+        var callerIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+        if (callerIdClaim is not null && int.TryParse(callerIdClaim, out var callerId) && callerId == id)
+            throw new ConflictException("Administrators cannot toggle their own account status");
+
         var result = await userAccountService.ToggleUserStatusAsync(id, ct);
         return Ok(result);
     }

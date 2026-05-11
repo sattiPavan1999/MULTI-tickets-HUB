@@ -20,8 +20,15 @@ builder.Services
     .AddSorting();
 
 builder.Services.AddCors(options =>
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+{
+    options.AddPolicy("DevelopmentCors", policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddPolicy("ProductionCors", policy =>
+    {
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
 
@@ -41,7 +48,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+if (app.Environment.IsDevelopment())
+    app.UseCors("DevelopmentCors");
+else
+    app.UseCors("ProductionCors");
 
 app.MapControllers();
 app.MapGraphQL("/graphql");
