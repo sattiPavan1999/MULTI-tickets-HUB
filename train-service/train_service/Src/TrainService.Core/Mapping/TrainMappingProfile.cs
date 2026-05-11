@@ -10,5 +10,6 @@ public class TrainMappingProfile : Profile
     {
         CreateMap<Train, TrainResponse>();
         CreateMap<SeatAvailability, SeatAvailabilityResponse>();
+        CreateMap<TrainBooking, TrainBookingResponse>();
     }
 }

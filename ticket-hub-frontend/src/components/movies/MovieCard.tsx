@@ -3,13 +3,15 @@ import type { MovieDto } from '@/services/api/movieApi';
 interface MovieCardProps {
   movie: MovieDto;
   onClick: () => void;
+  canBook?: boolean;
 }
 
-export function MovieCard({ movie, onClick }: MovieCardProps) {
+export function MovieCard({ movie, onClick, canBook = true }: MovieCardProps) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-800 text-left transition hover:border-white/20 hover:bg-white/[0.04] focus:outline-none focus:ring-2 focus:ring-teal-400/50"
+      disabled={!canBook}
+      className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-800 text-left transition focus:outline-none ${canBook ? 'hover:border-white/20 hover:bg-white/[0.04] focus:ring-2 focus:ring-teal-400/50 cursor-pointer' : 'cursor-default'}`}
     >
       <div className="relative h-48 w-full bg-white/5">
         {movie.posterUrl ? (
@@ -35,7 +37,7 @@ export function MovieCard({ movie, onClick }: MovieCardProps) {
           </span>
           <span className="text-xs text-white/40">{movie.duration} min</span>
         </div>
-        <p className="text-xs text-white/40">Tap to view showtimes</p>
+        <p className="text-xs text-white/40">{canBook ? 'Tap to view showtimes' : 'View only — admins cannot book'}</p>
       </div>
     </button>
   );

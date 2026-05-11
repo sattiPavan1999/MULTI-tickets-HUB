@@ -20,6 +20,8 @@ public class TrainControllerTests
         Source = "New Delhi",
         Destination = "Howrah",
         DepartureTime = DateTime.UtcNow.AddDays(1),
+        ArrivalTime = DateTime.UtcNow.AddDays(2),
+        Price = 1200m,
         CreatedAt = DateTime.UtcNow
     };
 
@@ -35,15 +37,29 @@ public class TrainControllerTests
     public async Task GetAll_ReturnsOkWithTrains()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.GetAllTrainsAsync(It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.SearchTrainsAsync(null, null, null, false, It.IsAny<CancellationToken>()))
            .ReturnsAsync([MakeTrainResponse(), MakeTrainResponse()]);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetAll(CancellationToken.None);
+        var result = await controller.GetAll(null, null, null, false, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<TrainResponse>>(ok.Value);
         list.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetAll_WithSearchParams_PassesThemToService()
+    {
+        var svc = new Mock<ITrainService>();
+        svc.Setup(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false, It.IsAny<CancellationToken>()))
+           .ReturnsAsync([MakeTrainResponse()]);
+        var controller = new TrainController(svc.Object);
+
+        var result = await controller.GetAll("New Delhi", "Howrah", "price", false, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        svc.Verify(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -77,7 +93,7 @@ public class TrainControllerTests
         svc.Setup(s => s.CreateTrainAsync(It.IsAny<CreateTrainInput>(), It.IsAny<CancellationToken>()))
            .ReturnsAsync(MakeTrainResponse(1));
         var controller = new TrainController(svc.Object);
-        var input = new CreateTrainInput { TrainName = "T", TrainNumber = "12345", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow.AddDays(1) };
+        var input = new CreateTrainInput { TrainName = "T", TrainNumber = "12345", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(5), Price = 500m };
 
         var result = await controller.Create(input, CancellationToken.None);
 

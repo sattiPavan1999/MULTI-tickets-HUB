@@ -32,7 +32,9 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         TrainNumber = number ?? $"T{Guid.NewGuid():N}"[..8],
         Source = "City A",
         Destination = "City B",
-        DepartureTime = DateTime.UtcNow.AddDays(1)
+        DepartureTime = DateTime.UtcNow.AddDays(1),
+        ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(10),
+        Price = 500m
     };
 
     [Fact]

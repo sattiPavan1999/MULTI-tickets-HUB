@@ -4,8 +4,8 @@ import { AuthPage } from '@/pages/AuthPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
-import { PlaceholderServicePage } from '@/pages/PlaceholderServicePage';
 import { MoviesPage } from '@/pages/MoviesPage';
+import { TrainsPage } from '@/pages/TrainsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { AdminMoviesPage } from '@/pages/AdminMoviesPage';
@@ -43,15 +43,7 @@ export function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/movies" element={<MoviesPage />} />
-          <Route
-            path="/trains"
-            element={
-              <PlaceholderServicePage
-                title="Train tickets"
-                description="Train booking is coming soon. We're putting the finishing touches on real-time schedules and one-tap booking."
-              />
-            }
-          />
+          <Route path="/trains" element={<TrainsPage />} />
         </Route>
       </Route>
 

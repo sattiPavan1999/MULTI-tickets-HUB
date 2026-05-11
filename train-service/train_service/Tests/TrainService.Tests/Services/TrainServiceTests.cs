@@ -2,6 +2,7 @@ using AutoMapper;
 using Bogus;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using TrainService.Core.Data;
@@ -26,6 +27,7 @@ public class TrainServiceTests
     {
         var options = new DbContextOptionsBuilder<TrainDbContext>()
             .UseInMemoryDatabase(dbName)
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         var db = new TrainDbContext(options);
         var trainRepo = new TrainRepository(db, NullLogger<TrainRepository>.Instance);
@@ -46,7 +48,9 @@ public class TrainServiceTests
         TrainNumber = number ?? $"T{Fake.Random.Number(1000, 9999)}",
         Source = "New Delhi",
         Destination = "Howrah",
-        DepartureTime = DateTime.UtcNow.AddDays(1)
+        DepartureTime = DateTime.UtcNow.AddDays(1),
+        ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(18),
+        Price = 1200m
     };
 
     [Fact]
@@ -87,7 +91,7 @@ public class TrainServiceTests
         var trainRepo = new Mock<ITrainRepository>();
         var seatRepo = new Mock<ISeatAvailabilityRepository>();
         trainRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new Train { Id = 1, TrainName = "T", TrainNumber = "1", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow }]);
+            .ReturnsAsync([new Train { Id = 1, TrainName = "T", TrainNumber = "1", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow, ArrivalTime = DateTime.UtcNow.AddHours(5), Price = 500m }]);
         var svc = new TrainService.Core.Services.TrainService(
             trainRepo.Object, seatRepo.Object,
             new CreateTrainInputValidator(), new UpdateTrainInputValidator(), new SeatAvailabilityInputValidator(),
@@ -139,5 +143,57 @@ public class TrainServiceTests
 
         await svc.Invoking(s => s.UpdateSeatAvailabilityAsync(train.Id, new SeatAvailabilityInput { Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = -1 }))
             .Should().ThrowAsync<FluentValidation.ValidationException>();
+    }
+
+    [Fact]
+    public async Task SearchTrains_NoParams_ReturnsAll()
+    {
+        var (svc, _) = BuildFullService(nameof(SearchTrains_NoParams_ReturnsAll));
+        await svc.CreateTrainAsync(ValidCreateInput());
+        await svc.CreateTrainAsync(ValidCreateInput());
+
+        var result = await svc.SearchTrainsAsync(null, null, null);
+
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task SearchTrains_FilterBySource_ReturnsMatching()
+    {
+        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterBySource_ReturnsMatching));
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "SA1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "SB1", Source = "Mumbai CST", Destination = "Pune", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(4), Price = 500m });
+
+        var result = await svc.SearchTrainsAsync("New Delhi", null, null);
+
+        result.Should().HaveCount(1);
+        result[0].Source.Should().Be("New Delhi");
+    }
+
+    [Fact]
+    public async Task SearchTrains_FilterByDestination_ReturnsMatching()
+    {
+        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterByDestination_ReturnsMatching));
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "DA1", Source = "Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "DB1", Source = "Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
+
+        var result = await svc.SearchTrainsAsync(null, "Howrah", null);
+
+        result.Should().HaveCount(1);
+        result[0].Destination.Should().Be("Howrah");
+    }
+
+    [Fact]
+    public async Task SearchTrains_FilterBothSourceAndDestination_ReturnsExactMatch()
+    {
+        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterBothSourceAndDestination_ReturnsExactMatch));
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "BD1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "BD2", Source = "New Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
+        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express C", TrainNumber = "BD3", Source = "Mumbai CST", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(2), ArrivalTime = DateTime.UtcNow.AddDays(3), Price = 1200m });
+
+        var result = await svc.SearchTrainsAsync("New Delhi", "Howrah", null);
+
+        result.Should().HaveCount(1);
+        result[0].TrainNumber.Should().Be("BD1");
     }
 }

@@ -17,6 +17,8 @@ const trainSchema = z.object({
   source: z.string().min(1, 'Source is required').max(255),
   destination: z.string().min(1, 'Destination is required').max(255),
   departureTime: z.string().min(1, 'Departure time is required'),
+  arrivalTime: z.string().min(1, 'Arrival time is required'),
+  price: z.number().min(0.01, 'Price must be greater than 0'),
 });
 
 const seatSchema = z.object({
@@ -36,6 +38,8 @@ function TrainForm({ defaultValues, onSubmit, onCancel, isLoading }: { defaultVa
       <Input label="Source" error={errors.source?.message} {...register('source')} />
       <Input label="Destination" error={errors.destination?.message} {...register('destination')} />
       <Input label="Departure Time" type="datetime-local" error={errors.departureTime?.message} {...register('departureTime')} />
+      <Input label="Arrival Time" type="datetime-local" error={errors.arrivalTime?.message} {...register('arrivalTime')} />
+      <Input label="Price (₹)" type="number" error={errors.price?.message} {...register('price', { valueAsNumber: true })} />
       <div className="flex gap-3 pt-2">
         <Button type="submit" isLoading={isLoading}>Save Train</Button>
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
@@ -125,10 +129,17 @@ function AdminTrainsContent() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const trains: TrainDto[] = (data as any)?.trains ?? [];
 
+  // datetime-local inputs give local time strings; convert to UTC ISO for the backend
+  const toUtcIso = (localInput: string) => localInput ? new Date(localInput).toISOString() : localInput;
+
   const handleCreate = async (formData: TrainFormData) => {
     setSubmitting(true);
     try {
-      await adminApi.createTrain(formData);
+      await adminApi.createTrain({
+        ...formData,
+        departureTime: toUtcIso(formData.departureTime),
+        arrivalTime: toUtcIso(formData.arrivalTime),
+      });
       await refetch();
       setModal(null);
       toast.success('Train created');
@@ -143,7 +154,11 @@ function AdminTrainsContent() {
     if (modal?.mode !== 'edit') return;
     setSubmitting(true);
     try {
-      await adminApi.updateTrain(modal.train.id, formData);
+      await adminApi.updateTrain(modal.train.id, {
+        ...formData,
+        departureTime: toUtcIso(formData.departureTime),
+        arrivalTime: toUtcIso(formData.arrivalTime),
+      });
       await refetch();
       setModal(null);
       toast.success('Train updated');
@@ -165,12 +180,22 @@ function AdminTrainsContent() {
     }
   };
 
+  // Convert stored UTC ISO string to local datetime-local input value (YYYY-MM-DDTHH:mm)
+  const toLocalInput = (utcIso?: string): string => {
+    if (!utcIso) return '';
+    const d = new Date(utcIso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const toFormDefaults = (t: TrainDto): TrainFormData => ({
     trainName: t.trainName,
     trainNumber: t.trainNumber,
     source: t.source,
     destination: t.destination,
-    departureTime: t.departureTime.slice(0, 16),
+    departureTime: toLocalInput(t.departureTime),
+    arrivalTime: toLocalInput(t.arrivalTime),
+    price: t.price ?? 0,
   });
 
   return (

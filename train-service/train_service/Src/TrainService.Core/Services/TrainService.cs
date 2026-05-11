@@ -23,6 +23,12 @@ public class TrainService(
         return mapper.Map<List<TrainResponse>>(trains);
     }
 
+    public async Task<List<TrainResponse>> SearchTrainsAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false, CancellationToken ct = default)
+    {
+        var trains = await trainRepository.SearchByRouteAsync(source, destination, sortBy, requiresAvailability, ct);
+        return mapper.Map<List<TrainResponse>>(trains);
+    }
+
     public async Task<TrainResponse?> GetTrainByIdAsync(int id, CancellationToken ct = default)
     {
         var train = await trainRepository.GetByIdAsync(id, ct);
@@ -42,7 +48,9 @@ public class TrainService(
             TrainNumber = input.TrainNumber,
             Source = input.Source,
             Destination = input.Destination,
-            DepartureTime = DateTime.SpecifyKind(input.DepartureTime, DateTimeKind.Utc)
+            DepartureTime = DateTime.SpecifyKind(input.DepartureTime, DateTimeKind.Utc),
+            ArrivalTime = DateTime.SpecifyKind(input.ArrivalTime, DateTimeKind.Utc),
+            Price = input.Price
         };
 
         var created = await trainRepository.AddAsync(train, ct);
@@ -61,6 +69,8 @@ public class TrainService(
         if (input.Source is not null) train.Source = input.Source;
         if (input.Destination is not null) train.Destination = input.Destination;
         if (input.DepartureTime.HasValue) train.DepartureTime = DateTime.SpecifyKind(input.DepartureTime.Value, DateTimeKind.Utc);
+        if (input.ArrivalTime.HasValue) train.ArrivalTime = DateTime.SpecifyKind(input.ArrivalTime.Value, DateTimeKind.Utc);
+        if (input.Price.HasValue) train.Price = input.Price.Value;
 
         if (input.TrainNumber is not null && input.TrainNumber != train.TrainNumber)
         {

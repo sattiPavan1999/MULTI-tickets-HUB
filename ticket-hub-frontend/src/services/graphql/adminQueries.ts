@@ -23,6 +23,8 @@ export const GET_ADMIN_TRAINS = gql`
       source
       destination
       departureTime
+      arrivalTime
+      price
       createdAt
     }
   }

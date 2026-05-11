@@ -23,6 +23,8 @@ public class CreateTrainRequest
     public string Source { get; set; } = string.Empty;
     public string Destination { get; set; } = string.Empty;
     public DateTime DepartureTime { get; set; }
+    public DateTime ArrivalTime { get; set; }
+    public decimal Price { get; set; }
 }
 
 public class UpdateTrainRequest
@@ -32,6 +34,8 @@ public class UpdateTrainRequest
     public string? Source { get; set; }
     public string? Destination { get; set; }
     public DateTime? DepartureTime { get; set; }
+    public DateTime? ArrivalTime { get; set; }
+    public decimal? Price { get; set; }
 }
 
 public class UpdateSeatAvailabilityRequest

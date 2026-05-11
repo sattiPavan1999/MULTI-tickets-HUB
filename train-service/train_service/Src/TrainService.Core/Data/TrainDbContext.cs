@@ -7,6 +7,7 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
 {
     public DbSet<Train> Trains { get; set; } = null!;
     public DbSet<SeatAvailability> SeatAvailabilities { get; set; } = null!;
+    public DbSet<TrainBooking> Bookings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,8 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
             entity.Property(e => e.Source).IsRequired().HasMaxLength(255);
             entity.Property(e => e.Destination).IsRequired().HasMaxLength(255);
             entity.Property(e => e.DepartureTime).IsRequired();
+            entity.Property(e => e.ArrivalTime).IsRequired();
+            entity.Property(e => e.Price).IsRequired().HasColumnType("decimal(10,2)");
             entity.Property(e => e.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
@@ -40,6 +43,23 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
                 .HasForeignKey(e => e.TrainId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => new { e.TrainId, e.Date }).IsUnique();
+        });
+
+        modelBuilder.Entity<TrainBooking>(entity =>
+        {
+            entity.ToTable("Bookings");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.PassengerName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.PNR).IsRequired().HasMaxLength(20);
+            entity.HasIndex(e => e.PNR).IsUnique();
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Confirmed");
+            entity.Property(e => e.BookedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(e => new { e.TrainId, e.TravelDate, e.Status });
+            entity.HasOne(e => e.Train)
+                .WithMany()
+                .HasForeignKey(e => e.TrainId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

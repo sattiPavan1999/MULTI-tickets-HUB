@@ -22,11 +22,14 @@ public static class CoreServiceExtensions
 
         services.AddScoped<ITrainRepository, TrainRepository>();
         services.AddScoped<ISeatAvailabilityRepository, SeatAvailabilityRepository>();
+        services.AddScoped<ITrainBookingRepository, TrainBookingRepository>();
         services.AddScoped<ITrainService, TrainService.Core.Services.TrainService>();
+        services.AddScoped<ITrainBookingService, TrainBookingService>();
 
         services.AddScoped<IValidator<DTOs.CreateTrainInput>, CreateTrainInputValidator>();
         services.AddScoped<IValidator<DTOs.UpdateTrainInput>, UpdateTrainInputValidator>();
         services.AddScoped<IValidator<DTOs.SeatAvailabilityInput>, SeatAvailabilityInputValidator>();
+        services.AddScoped<IValidator<DTOs.CreateTrainBookingInput>, CreateTrainBookingInputValidator>();
 
         services.AddAutoMapper(typeof(TrainMappingProfile).Assembly);
 

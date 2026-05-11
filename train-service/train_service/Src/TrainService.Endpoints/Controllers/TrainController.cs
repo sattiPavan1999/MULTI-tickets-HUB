@@ -9,9 +9,14 @@ namespace TrainService.Endpoints.Controllers;
 public class TrainController(ITrainService trainService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<List<TrainResponse>>> GetAll(CancellationToken ct)
+    public async Task<ActionResult<List<TrainResponse>>> GetAll(
+        [FromQuery] string? source,
+        [FromQuery] string? destination,
+        [FromQuery] string? sortBy,
+        [FromQuery] bool requiresAvailability = false,
+        CancellationToken ct = default)
     {
-        var trains = await trainService.GetAllTrainsAsync(ct);
+        var trains = await trainService.SearchTrainsAsync(source, destination, sortBy, requiresAvailability, ct);
         return Ok(trains);
     }
 

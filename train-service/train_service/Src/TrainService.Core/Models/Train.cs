@@ -8,5 +8,7 @@ public class Train
     public required string Source { get; set; }
     public required string Destination { get; set; }
     public DateTime DepartureTime { get; set; }
+    public DateTime ArrivalTime { get; set; }
+    public decimal Price { get; set; }
     public DateTime CreatedAt { get; set; }
 }

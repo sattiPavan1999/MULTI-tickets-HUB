@@ -3,8 +3,11 @@ import { movieApi, type MovieDto } from '@/services/api/movieApi';
 import { MovieCard } from '@/components/movies/MovieCard';
 import { BookingModal } from '@/components/movies/BookingModal';
 import { Spinner } from '@/components/ui/Spinner';
+import { useAuth } from '@/hooks/useAuth';
 
 export function MoviesPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Admin';
   const [movies, setMovies] = useState<MovieDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,7 +70,8 @@ export function MoviesPage() {
             <MovieCard
               key={movie.id}
               movie={movie}
-              onClick={() => setSelectedMovie(movie)}
+              canBook={!isAdmin}
+              onClick={() => { if (!isAdmin) setSelectedMovie(movie); }}
             />
           ))}
         </div>

@@ -33,7 +33,9 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
             TrainNumber = $"ST{Guid.NewGuid():N}"[..8],
             Source = "A",
             Destination = "B",
-            DepartureTime = DateTime.UtcNow.AddDays(1)
+            DepartureTime = DateTime.UtcNow.AddDays(1),
+            ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6),
+            Price = 600m
         }, CancellationToken.None);
     }
 

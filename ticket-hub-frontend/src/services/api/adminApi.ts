@@ -17,6 +17,8 @@ export interface TrainDto {
   source: string;
   destination: string;
   departureTime: string;
+  arrivalTime: string;
+  price: number;
   createdAt: string;
 }
 
@@ -65,10 +67,10 @@ export const adminApi = {
     apiClient.put<AdminOperationResult>(`/api/admin/movies/${id}/toggle-status`).then((r) => r.data),
 
   // Trains
-  createTrain: (data: { trainName: string; trainNumber: string; source: string; destination: string; departureTime: string }) =>
+  createTrain: (data: { trainName: string; trainNumber: string; source: string; destination: string; departureTime: string; arrivalTime: string; price: number }) =>
     apiClient.post<TrainDto>('/api/admin/trains', data).then((r) => r.data),
 
-  updateTrain: (id: number, data: Partial<{ trainName: string; trainNumber: string; source: string; destination: string; departureTime: string }>) =>
+  updateTrain: (id: number, data: Partial<{ trainName: string; trainNumber: string; source: string; destination: string; departureTime: string; arrivalTime: string; price: number }>) =>
     apiClient.put<TrainDto>(`/api/admin/trains/${id}`, data).then((r) => r.data),
 
   deleteTrain: (id: number) =>

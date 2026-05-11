@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TrainService.Core.Data;
@@ -11,9 +12,11 @@ using TrainService.Core.Data;
 namespace TrainService.Core.Migrations
 {
     [DbContext(typeof(TrainDbContext))]
-    partial class TrainDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260511075315_AddArrivalTimeAndPrice")]
+    partial class AddArrivalTimeAndPrice
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -98,76 +101,7 @@ namespace TrainService.Core.Migrations
                     b.ToTable("Trains", "trains");
                 });
 
-            modelBuilder.Entity("TrainService.Core.Models.TrainBooking", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("BookedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<int>("NumberOfSeats")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PNR")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int>("PassengerAge")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PassengerName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Confirmed");
-
-                    b.Property<int>("TrainId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly>("TravelDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("WaitlistPosition")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PNR")
-                        .IsUnique();
-
-                    b.HasIndex("TrainId", "TravelDate", "Status");
-
-                    b.ToTable("Bookings", "trains");
-                });
-
             modelBuilder.Entity("TrainService.Core.Models.SeatAvailability", b =>
-                {
-                    b.HasOne("TrainService.Core.Models.Train", "Train")
-                        .WithMany()
-                        .HasForeignKey("TrainId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Train");
-                });
-
-            modelBuilder.Entity("TrainService.Core.Models.TrainBooking", b =>
                 {
                     b.HasOne("TrainService.Core.Models.Train", "Train")
                         .WithMany()
