@@ -109,14 +109,28 @@ public class MovieServiceTests
     [Fact]
     public async Task GetAllMovies_ReturnsAllMovies()
     {
-        var repo = new Mock<IMovieRepository>();
-        repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([MakeEntity(), MakeEntity(), MakeEntity()]);
-        var svc = BuildMocked(repo);
+        var (svc, db) = BuildFullService(nameof(GetAllMovies_ReturnsAllMovies));
+        db.Movies.AddRange(MakeEntity(), MakeEntity(), MakeEntity());
+        await db.SaveChangesAsync();
 
         var result = await svc.GetAllMoviesAsync();
 
         result.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task GetAllMovies_ActiveOnly_FiltersAtDbLevel()
+    {
+        var (svc, db) = BuildFullService(nameof(GetAllMovies_ActiveOnly_FiltersAtDbLevel));
+        var active = MakeEntity(); active.IsActive = true;
+        var inactive = MakeEntity(); inactive.IsActive = false;
+        db.Movies.AddRange(active, inactive);
+        await db.SaveChangesAsync();
+
+        var result = await svc.GetAllMoviesAsync(activeOnly: true);
+
+        result.Should().HaveCount(1);
+        result[0].IsActive.Should().BeTrue();
     }
 
     // ── GetMovieById ──────────────────────────────────────────────────────────

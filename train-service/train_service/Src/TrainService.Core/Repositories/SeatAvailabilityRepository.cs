@@ -14,6 +14,19 @@ public class SeatAvailabilityRepository(TrainDbContext context) : ISeatAvailabil
 
     public async Task<SeatAvailability> UpsertAsync(SeatAvailability availability, CancellationToken ct = default)
     {
+        // Check change tracker first — if the entity was loaded earlier in the same unit of work
+        // (e.g. from GetByTrainAndDateAsync in the booking transaction) it's already tracked
+        // and we avoid a redundant SELECT.
+        var tracked = context.ChangeTracker.Entries<SeatAvailability>()
+            .FirstOrDefault(e => e.Entity.TrainId == availability.TrainId && e.Entity.Date == availability.Date);
+
+        if (tracked is not null)
+        {
+            tracked.Entity.AvailableSeats = availability.AvailableSeats;
+            await context.SaveChangesAsync(ct);
+            return tracked.Entity;
+        }
+
         var existing = await GetByTrainAndDateAsync(availability.TrainId, availability.Date, ct);
         if (existing is null)
         {

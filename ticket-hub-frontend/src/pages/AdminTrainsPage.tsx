@@ -66,9 +66,11 @@ function SeatAvailabilityModal({ train, onClose }: { train: TrainDto; onClose: (
   const handleUpsert = async (data: SeatFormData) => {
     setSubmitting(true);
     try {
-      await adminApi.updateSeatAvailability(train.id, data);
-      const updated = await adminApi.getTrainSeatAvailability(train.id);
-      setSeats(updated);
+      const updated = await adminApi.updateSeatAvailability(train.id, data);
+      setSeats(prev => {
+        const idx = prev.findIndex(s => s.date === updated.date);
+        return idx >= 0 ? prev.map((s, i) => i === idx ? updated : s) : [...prev, updated];
+      });
       reset();
       toast.success('Seat availability updated');
     } catch {

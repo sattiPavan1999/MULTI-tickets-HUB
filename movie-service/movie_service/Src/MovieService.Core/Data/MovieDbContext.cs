@@ -115,6 +115,8 @@ public class MovieDbContext(DbContextOptions<MovieDbContext> options) : DbContex
                 .IsRequired()
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            entity.HasIndex(e => e.ShowtimeId);
+
             entity.HasOne(e => e.Showtime)
                 .WithMany()
                 .HasForeignKey(e => e.ShowtimeId)

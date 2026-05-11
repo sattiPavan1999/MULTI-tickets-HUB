@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { movieApi, type MovieDto, type ShowtimeDto, type SeatStatusResponse } from '@/services/api/movieApi';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -73,7 +73,8 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
     }
   };
 
-  const bookedSet = new Set(seatStatus?.bookedSeats ?? []);
+  const bookedSet = useMemo(() => new Set(seatStatus?.bookedSeats ?? []), [seatStatus]);
+  const selectedSeatsSet = useMemo(() => new Set(selectedSeats), [selectedSeats]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -140,7 +141,7 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
                 <div className="grid grid-cols-10 gap-1 mb-4">
                   {Array.from({ length: seatStatus?.totalSeats ?? selectedShowtime.totalSeats }, (_, i) => i + 1).map((seat) => {
                     const isBooked = bookedSet.has(seat);
-                    const isSelected = selectedSeats.includes(seat);
+                    const isSelected = selectedSeatsSet.has(seat);
                     return (
                       <button
                         key={seat}

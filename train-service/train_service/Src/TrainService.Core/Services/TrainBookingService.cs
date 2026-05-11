@@ -44,7 +44,7 @@ public class TrainBookingService(
             if (seat.AvailableSeats >= input.NumberOfSeats)
             {
                 seat.AvailableSeats -= input.NumberOfSeats;
-                await seatRepository.UpsertAsync(seat, ct);
+                dbContext.SeatAvailabilities.Update(seat);
 
                 booking = new TrainBooking
                 {
@@ -84,11 +84,12 @@ public class TrainBookingService(
                 throw new ConflictException($"Only {seat.AvailableSeats} seat(s) available. Please reduce your seat count.");
             }
 
-            var created = await bookingRepository.AddAsync(booking, ct);
+            dbContext.Bookings.Add(booking);
+            await dbContext.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            logger.LogInformation("Booking created: PNR={PNR}, Status={Status}, TrainId={TrainId}", created.PNR, created.Status, created.TrainId);
-            return mapper.Map<TrainBookingResponse>(created);
+            logger.LogInformation("Booking created: PNR={PNR}, Status={Status}, TrainId={TrainId}", booking.PNR, booking.Status, booking.TrainId);
+            return mapper.Map<TrainBookingResponse>(booking);
         }
         catch (DbUpdateException)
         {
@@ -116,7 +117,7 @@ public class TrainBookingService(
             var wasConfirmed = booking.Status == BookingStatus.Confirmed;
             booking.Status = BookingStatus.Cancelled;
             booking.WaitlistPosition = null;
-            await bookingRepository.UpdateAsync(booking, ct);
+            dbContext.Bookings.Update(booking);
 
             if (wasConfirmed)
             {
@@ -124,20 +125,19 @@ public class TrainBookingService(
                 if (seat is not null)
                 {
                     seat.AvailableSeats += booking.NumberOfSeats;
-                    await seatRepository.UpsertAsync(seat, ct);
+                    dbContext.SeatAvailabilities.Update(seat);
                 }
-
-                // Promote waitlist inside the same transaction so promotion is atomic with cancellation
+                // PromoteWaitlistAsync flushes all pending changes (cancellation + seat free + promotion)
+                // in a single SaveChangesAsync call
                 await PromoteWaitlistAsync(booking.TrainId, booking.TravelDate, ct);
             }
             else
             {
                 var remaining = await bookingRepository.GetWaitlistedByTrainAndDateAsync(booking.TrainId, booking.TravelDate, ct);
                 for (var i = 0; i < remaining.Count; i++)
-                {
                     remaining[i].WaitlistPosition = i + 1;
-                    await bookingRepository.UpdateAsync(remaining[i], ct);
-                }
+                dbContext.Bookings.UpdateRange(remaining);
+                await dbContext.SaveChangesAsync(ct);
             }
 
             await tx.CommitAsync(ct);
@@ -163,19 +163,19 @@ public class TrainBookingService(
         if (seat is not null && seat.AvailableSeats >= first.NumberOfSeats)
         {
             seat.AvailableSeats -= first.NumberOfSeats;
-            await seatRepository.UpsertAsync(seat, ct);
+            dbContext.SeatAvailabilities.Update(seat);
         }
 
         first.Status = BookingStatus.Confirmed;
         first.WaitlistPosition = null;
-        await bookingRepository.UpdateAsync(first, ct);
+        dbContext.Bookings.Update(first);
 
         for (var i = 1; i < waitlisted.Count; i++)
-        {
             waitlisted[i].WaitlistPosition = i;
-            await bookingRepository.UpdateAsync(waitlisted[i], ct);
-        }
+        if (waitlisted.Count > 1)
+            dbContext.Bookings.UpdateRange(waitlisted.Skip(1));
 
+        await dbContext.SaveChangesAsync(ct);
         logger.LogInformation("Promoted PNR={PNR} from Waitlisted to Confirmed for TrainId={TrainId} on {Date}", first.PNR, trainId, date);
     }
 }

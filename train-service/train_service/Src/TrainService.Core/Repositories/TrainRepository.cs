@@ -22,7 +22,7 @@ public class TrainRepository(TrainDbContext context, ILogger<TrainRepository> lo
     public async Task<List<Train>> SearchByRouteAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false, CancellationToken ct = default)
     {
         logger.LogDebug("Searching trains: source={Source}, destination={Destination}, sortBy={SortBy}, requiresAvailability={RequiresAvailability}", source, destination, sortBy, requiresAvailability);
-        var query = context.Trains.AsQueryable();
+        var query = context.Trains.AsNoTracking().AsQueryable();
 
         if (requiresAvailability)
             query = query.Where(t => context.SeatAvailabilities.Any(s => s.TrainId == t.Id));

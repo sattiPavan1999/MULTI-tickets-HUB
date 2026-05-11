@@ -1,5 +1,6 @@
 using AutoMapper;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MovieService.Core.DTOs;
 using MovieService.Core.Exceptions;
@@ -17,9 +18,10 @@ public class MovieService(
 {
     public async Task<List<MovieResponse>> GetAllMoviesAsync(bool? activeOnly = null, CancellationToken ct = default)
     {
-        var movies = await movieRepository.GetAllAsync(ct);
+        var query = movieRepository.Query();
         if (activeOnly is true)
-            movies = movies.Where(m => m.IsActive).ToList();
+            query = query.Where(m => m.IsActive);
+        var movies = await query.ToListAsync(ct);
         return mapper.Map<List<MovieResponse>>(movies);
     }
 

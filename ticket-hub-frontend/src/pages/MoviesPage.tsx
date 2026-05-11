@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { movieApi, type MovieDto } from '@/services/api/movieApi';
 import { MovieCard } from '@/components/movies/MovieCard';
 import { BookingModal } from '@/components/movies/BookingModal';
@@ -23,13 +23,19 @@ export function MoviesPage() {
     return () => { active = false; };
   }, []);
 
-  const genres = Array.from(new Set(movies.map((m) => m.genre))).sort();
+  const genres = useMemo(
+    () => Array.from(new Set(movies.map((m) => m.genre))).sort(),
+    [movies]
+  );
 
-  const filteredMovies = movies.filter((m) => {
-    const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGenre = !selectedGenre || m.genre === selectedGenre;
-    return matchesSearch && matchesGenre;
-  });
+  const filteredMovies = useMemo(
+    () => movies.filter((m) => {
+      const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesGenre = !selectedGenre || m.genre === selectedGenre;
+      return matchesSearch && matchesGenre;
+    }),
+    [movies, searchQuery, selectedGenre]
+  );
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 py-10">
