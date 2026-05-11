@@ -10,7 +10,10 @@ namespace IdentityService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(
+    IAuthService authService,
+    IUserAccountService userAccountService,
+    IPasswordService passwordService) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
@@ -39,7 +42,7 @@ public class AuthController(IAuthService authService) : ControllerBase
         if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
             return Unauthorized();
 
-        var user = await authService.UpdateProfileAsync(userId, input, ct);
+        var user = await userAccountService.UpdateProfileAsync(userId, input, ct);
         return Ok(user);
     }
 
@@ -47,7 +50,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordInput input, CancellationToken ct)
     {
-        var response = await authService.ForgotPasswordAsync(input, ct);
+        var response = await passwordService.ForgotPasswordAsync(input, ct);
         return Ok(response);
     }
 
@@ -55,7 +58,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<OperationResult>> ResetPassword([FromBody] ResetPasswordInput input, CancellationToken ct)
     {
-        var response = await authService.ResetPasswordAsync(input, ct);
+        var response = await passwordService.ResetPasswordAsync(input, ct);
         return Ok(response);
     }
 
@@ -63,7 +66,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<List<UserType>>> GetAllUsers(CancellationToken ct)
     {
-        var users = await authService.GetAllUsersAsync(ct);
+        var users = await userAccountService.GetAllUsersAsync(ct);
         return Ok(users);
     }
 
@@ -71,7 +74,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id, CancellationToken ct)
     {
-        var result = await authService.ToggleUserStatusAsync(id, ct);
+        var result = await userAccountService.ToggleUserStatusAsync(id, ct);
         return Ok(result);
     }
 }

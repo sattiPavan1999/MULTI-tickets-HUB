@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Net;
 using System.Text.Json;
 using FluentValidation;
 using IdentityService.Core.DTOs;
@@ -17,38 +15,34 @@ public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExcep
         }
         catch (Exception ex)
         {
+            if (ex is not ValidationException)
+                logger.LogError(ex, "Unhandled exception");
             await HandleExceptionAsync(context, ex);
         }
     }
 
-    private Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private static async Task HandleExceptionAsync(HttpContext context, Exception ex)
     {
-        var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
-
-        if (exception is not ValidationException)
-            logger.LogError(exception, "Unhandled exception. TraceId: {TraceId}", traceId);
-
-        var (statusCode, errorCode, message) = exception switch
+        var (statusCode, errorCode, message) = ex switch
         {
-            ValidationException ve => (HttpStatusCode.BadRequest, "VALIDATION_ERROR",
-                string.Join("; ", ve.Errors.Select(e => e.ErrorMessage))),
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "UNAUTHORIZED", exception.Message),
-            ConflictException => (HttpStatusCode.Conflict, "CONFLICT", exception.Message),
-            NotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND", exception.Message),
-            _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR", "An error occurred processing your request")
+            ValidationException ve => (400, "VALIDATION_ERROR", string.Join("; ", ve.Errors.Select(e => e.ErrorMessage))),
+            NotFoundException => (404, "NOT_FOUND", ex.Message),
+            ConflictException => (409, "CONFLICT", ex.Message),
+            UnauthorizedAccessException => (401, "UNAUTHORIZED", ex.Message),
+            _ => (500, "INTERNAL_ERROR", "An unexpected error occurred")
         };
 
-        var errorResponse = new ErrorResponse
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json";
+
+        var response = new ErrorResponse
         {
             ErrorCode = errorCode,
             Message = message,
-            Timestamp = DateTime.UtcNow,
-            TraceId = traceId
+            TraceId = context.TraceIdentifier
         };
 
-        context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)statusCode;
-
-        return context.Response.WriteAsync(JsonSerializer.Serialize(errorResponse));
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
 }

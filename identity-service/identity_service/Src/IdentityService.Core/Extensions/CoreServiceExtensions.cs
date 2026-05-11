@@ -24,13 +24,10 @@ public static class CoreServiceExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
 
-        // Sub-services
-        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        // Services
+        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IPasswordService, PasswordService>();
-
-        // Facade
-        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IAuditService, AuditService>();
 

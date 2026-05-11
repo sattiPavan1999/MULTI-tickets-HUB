@@ -1,36 +1,69 @@
+using AutoMapper;
+using FluentValidation;
 using IdentityService.Core.DTOs;
+using IdentityService.Core.Exceptions;
+using IdentityService.Core.Models;
+using IdentityService.Core.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace IdentityService.Core.Services;
 
 public class AuthService(
-    IAuthenticationService authenticationService,
-    IUserAccountService userAccountService,
-    IPasswordService passwordService) : IAuthService
+    IUserRepository userRepository,
+    IJwtService jwtService,
+    IAuditService auditService,
+    IValidator<RegisterInput> registerValidator,
+    IValidator<LoginInput> loginValidator,
+    IMapper mapper,
+    ILogger<AuthService> logger) : IAuthService
 {
-    public Task<UserType> RegisterAsync(RegisterInput input, CancellationToken ct = default)
-        => authenticationService.RegisterAsync(input, ct);
+    public async Task<UserType> RegisterAsync(RegisterInput input, CancellationToken ct = default)
+    {
+        await registerValidator.ValidateAndThrowAsync(input, ct);
 
-    public Task<LoginResponse> LoginAsync(LoginInput input, CancellationToken ct = default)
-        => authenticationService.LoginAsync(input, ct);
+        if (await userRepository.EmailExistsAsync(input.Email, ct))
+        {
+            logger.LogWarning("Registration attempt with existing email: {Email}", input.Email);
+            throw new ConflictException("Email already registered");
+        }
 
-    public Task<UserType?> GetUserByIdAsync(int id, CancellationToken ct = default)
-        => userAccountService.GetUserByIdAsync(id, ct);
+        var user = new User
+        {
+            Email = input.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(input.Password),
+            FullName = input.FullName,
+            PhoneNumber = input.PhoneNumber,
+            Role = Roles.User
+        };
 
-    public Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input, CancellationToken ct = default)
-        => userAccountService.UpdateProfileAsync(userId, input, ct);
+        var created = await userRepository.AddAsync(user, ct);
+        await auditService.LogAsync($"User registered: {created.Email}");
+        return mapper.Map<UserType>(created);
+    }
 
-    public Task<List<UserType>> GetAllUsersAsync(CancellationToken ct = default)
-        => userAccountService.GetAllUsersAsync(ct);
+    public async Task<LoginResponse> LoginAsync(LoginInput input, CancellationToken ct = default)
+    {
+        await loginValidator.ValidateAndThrowAsync(input, ct);
 
-    public Task<int> GetUserCountAsync(CancellationToken ct = default)
-        => userAccountService.GetUserCountAsync(ct);
+        var user = await userRepository.GetByEmailAsync(input.Email, ct);
 
-    public Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input, CancellationToken ct = default)
-        => passwordService.ForgotPasswordAsync(input, ct);
+        if (user is null || !BCrypt.Net.BCrypt.Verify(input.Password, user.PasswordHash))
+        {
+            logger.LogWarning("Failed login attempt for email: {Email}", input.Email);
+            await auditService.LogAsync($"Failed login attempt for: {input.Email}");
+            throw new UnauthorizedAccessException("Invalid credentials");
+        }
 
-    public Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input, CancellationToken ct = default)
-        => passwordService.ResetPasswordAsync(input, ct);
+        if (!user.IsActive)
+        {
+            logger.LogWarning("Login attempt on deactivated account: {Email}", input.Email);
+            await auditService.LogAsync($"Login blocked — account deactivated: {input.Email}");
+            throw new UnauthorizedAccessException("Account is deactivated");
+        }
 
-    public Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default)
-        => userAccountService.ToggleUserStatusAsync(userId, ct);
+        var token = jwtService.GenerateToken(user);
+        await auditService.LogAsync($"User logged in: {user.Email}");
+
+        return new LoginResponse { Token = token, User = mapper.Map<UserType>(user) };
+    }
 }

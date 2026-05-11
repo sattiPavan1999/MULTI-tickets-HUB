@@ -41,7 +41,7 @@ public class QueryTests
     public async Task GetMe_ValidNameIdentifierClaim_ReturnsUser()
     {
         var user = MakeUserType(1);
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var result = await new Query().GetMe(MakePrincipal("1"), svc.Object, CancellationToken.None);
@@ -54,7 +54,7 @@ public class QueryTests
     public async Task GetMe_FallsBackToSubClaim_WhenNoNameIdentifier()
     {
         var user = MakeUserType(2);
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserByIdAsync(2, It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var result = await new Query().GetMe(MakePrincipal(nameId: null, sub: "2"), svc.Object, CancellationToken.None);
@@ -66,7 +66,7 @@ public class QueryTests
     [Fact]
     public async Task GetMe_NoClaims_ThrowsUnauthorizedAccessException()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             new Query().GetMe(new ClaimsPrincipal(new ClaimsIdentity()), svc.Object, CancellationToken.None));
@@ -75,7 +75,7 @@ public class QueryTests
     [Fact]
     public async Task GetMe_NonNumericClaim_ThrowsUnauthorizedAccessException()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             new Query().GetMe(MakePrincipal("not-a-number"), svc.Object, CancellationToken.None));
@@ -84,7 +84,7 @@ public class QueryTests
     [Fact]
     public async Task GetMe_UserNotFound_ThrowsInvalidOperationException()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync((UserType?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -97,7 +97,7 @@ public class QueryTests
     public async Task GetUser_ExistingId_ReturnsUser()
     {
         var user = MakeUserType(1);
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
 
         var result = await new Query().GetUser(1, svc.Object, CancellationToken.None);
@@ -109,7 +109,7 @@ public class QueryTests
     [Fact]
     public async Task GetUser_NonExistentId_ReturnsNull()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserByIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((UserType?)null);
 
         var result = await new Query().GetUser(999, svc.Object, CancellationToken.None);
@@ -148,7 +148,7 @@ public class QueryTests
     [Fact]
     public async Task GetUserCount_ReturnsCountFromService()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(42);
 
         var result = await new Query().GetUserCount(svc.Object, CancellationToken.None);
@@ -159,7 +159,7 @@ public class QueryTests
     [Fact]
     public async Task GetUserCount_EmptyDatabase_ReturnsZero()
     {
-        var svc = new Mock<IAuthService>();
+        var svc = new Mock<IUserAccountService>();
         svc.Setup(s => s.GetUserCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
 
         var result = await new Query().GetUserCount(svc.Object, CancellationToken.None);

@@ -15,7 +15,7 @@ public class Query
     [Authorize]
     public async Task<UserType?> GetMe(
         ClaimsPrincipal claimsPrincipal,
-        [Service] IAuthService authService,
+        [Service] IUserAccountService userAccountService,
         CancellationToken ct)
     {
         var userIdClaim = claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -24,13 +24,13 @@ public class Query
         if (userIdClaim is null || !int.TryParse(userIdClaim, out var userId))
             throw new UnauthorizedAccessException("Invalid token");
 
-        return await authService.GetUserByIdAsync(userId, ct)
+        return await userAccountService.GetUserByIdAsync(userId, ct)
             ?? throw new InvalidOperationException("User not found");
     }
 
     [Authorize]
-    public async Task<UserType?> GetUser(int id, [Service] IAuthService authService, CancellationToken ct)
-        => await authService.GetUserByIdAsync(id, ct);
+    public async Task<UserType?> GetUser(int id, [Service] IUserAccountService userAccountService, CancellationToken ct)
+        => await userAccountService.GetUserByIdAsync(id, ct);
 
     [Authorize]
     [UseFiltering]
@@ -39,6 +39,6 @@ public class Query
         => userRepository.Query();
 
     [Authorize]
-    public async Task<int> GetUserCount([Service] IAuthService authService, CancellationToken ct)
-        => await authService.GetUserCountAsync(ct);
+    public async Task<int> GetUserCount([Service] IUserAccountService userAccountService, CancellationToken ct)
+        => await userAccountService.GetUserCountAsync(ct);
 }

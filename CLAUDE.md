@@ -170,6 +170,21 @@ The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000
       Middleware/
 ```
 
+**identity-service service layer**: Unlike movie/train which have a single domain service per entity, identity-service splits logic into three focused services injected directly wherever needed — there is no aggregating facade:
+- `IAuthService` — `RegisterAsync`, `LoginAsync`
+- `IUserAccountService` — `GetUserByIdAsync`, `UpdateProfileAsync`, `GetAllUsersAsync`, `GetUserCountAsync`, `ToggleUserStatusAsync`
+- `IPasswordService` — `ForgotPasswordAsync`, `ResetPasswordAsync`
+
+`AuthController` injects all three; `Query.cs` (GraphQL) injects only `IUserAccountService`. When adding new identity endpoints, inject the sub-service that owns the operation — do not introduce a new facade interface.
+
+**identity-service test pattern**: `AuthServiceTests.cs` uses a private `Services` record to group the three sub-services:
+```csharp
+private record Services(IAuthService Auth, IUserAccountService Account, IPasswordService Password);
+```
+`BuildFullService(dbName)` returns `(Services svc, IdentityDbContext db)`; `BuildMocked(userRepo)` returns `Services` only. Tests call `svc.Auth.RegisterAsync(...)`, `svc.Account.GetUserByIdAsync(...)`, etc.
+
+**Shared infrastructure**: `GlobalExceptionMiddleware`, `ErrorResponse`, `NotFoundException`, and `ConflictException` are identical across all four services (namespace aside). Exception classes use primary constructor syntax: `public class NotFoundException(string message) : Exception(message);`. `ErrorResponse` uses `= string.Empty` property defaults and `DateTime.UtcNow` for `Timestamp`. `GlobalExceptionMiddleware` uses `static async`, int status code literals, `context.TraceIdentifier`, and `JsonNamingPolicy.CamelCase` serialization.
+
 ### Domain models
 
 **identity-service — `User`**: Id, Email, PasswordHash, FullName, PhoneNumber, Role (`Roles.User`|`Roles.Admin`), IsActive (default `true`), CreatedAt.

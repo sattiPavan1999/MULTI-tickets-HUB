@@ -15,10 +15,6 @@ using Moq;
 
 namespace IdentityService.Tests.Services;
 
-/// <summary>
-/// Service-layer tests — use EF InMemory for workflows that need the DB (UpdateProfile,
-/// ForgotPassword, ResetPassword) and Moq for lightweight unit coverage of Register/Login/Get*.
-/// </summary>
 public class AuthServiceTests
 {
     // ── Fakers ────────────────────────────────────────────────────────────────
@@ -34,13 +30,6 @@ public class AuthServiceTests
             PhoneNumber = f.Phone.PhoneNumber("+1##########")
         });
 
-    private static readonly Faker<LoginInput> LoginFaker = new Faker<LoginInput>()
-        .CustomInstantiator(f => new LoginInput
-        {
-            Email = f.Internet.Email(),
-            Password = "Password1!"
-        });
-
     // ── InMemory wiring ───────────────────────────────────────────────────────
 
     private static readonly IConfiguration DevConfig = new ConfigurationBuilder()
@@ -54,7 +43,12 @@ public class AuthServiceTests
     private static IMapper BuildMapper()
         => new MapperConfiguration(c => c.AddProfile<UserMappingProfile>()).CreateMapper();
 
-    private static (IAuthService svc, IdentityDbContext db) BuildFullService(string dbName)
+    private record Services(
+        IAuthService Auth,
+        IUserAccountService Account,
+        IPasswordService Password);
+
+    private static (Services svc, IdentityDbContext db) BuildFullService(string dbName)
     {
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseInMemoryDatabase(dbName)
@@ -67,21 +61,21 @@ public class AuthServiceTests
         var jwt = new StubJwtService();
         var audit = new Mock<IAuditService>().Object;
 
-        var authSvc = new AuthenticationService(
+        var auth = new AuthService(
             userRepo, jwt, audit,
             new RegisterInputValidator(), new LoginInputValidator(),
-            mapper, NullLogger<AuthenticationService>.Instance);
+            mapper, NullLogger<AuthService>.Instance);
 
-        var accountSvc = new UserAccountService(
+        var account = new UserAccountService(
             userRepo, audit,
             new UpdateProfileInputValidator(),
             mapper, NullLogger<UserAccountService>.Instance);
 
-        var pwdSvc = new PasswordService(
+        var password = new PasswordService(
             userRepo, resetRepo, audit,
             DevConfig, NullLogger<PasswordService>.Instance);
 
-        return (new AuthService(authSvc, accountSvc, pwdSvc), db);
+        return (new Services(auth, account, password), db);
     }
 
     private static async Task<User> SeedUserAsync(IdentityDbContext db,
@@ -115,7 +109,7 @@ public class AuthServiceTests
         CreatedAt = DateTime.UtcNow
     };
 
-    private static IAuthService BuildMocked(
+    private static Services BuildMocked(
         Mock<IUserRepository> userRepo,
         Mock<IPasswordResetTokenRepository>? resetRepo = null,
         Mock<IJwtService>? jwt = null)
@@ -124,22 +118,22 @@ public class AuthServiceTests
         var mockJwt = jwt ?? new Mock<IJwtService>();
         if (jwt is null) mockJwt.Setup(j => j.GenerateToken(It.IsAny<User>())).Returns("stub-token");
 
-        var authSvc = new AuthenticationService(
+        var auth = new AuthService(
             userRepo.Object, mockJwt.Object, new Mock<IAuditService>().Object,
             new RegisterInputValidator(), new LoginInputValidator(),
-            mapper, NullLogger<AuthenticationService>.Instance);
+            mapper, NullLogger<AuthService>.Instance);
 
-        var accountSvc = new UserAccountService(
+        var account = new UserAccountService(
             userRepo.Object, new Mock<IAuditService>().Object,
             new UpdateProfileInputValidator(),
             mapper, NullLogger<UserAccountService>.Instance);
 
         var mockReset = resetRepo ?? new Mock<IPasswordResetTokenRepository>();
-        var pwdSvc = new PasswordService(
+        var password = new PasswordService(
             userRepo.Object, mockReset.Object, new Mock<IAuditService>().Object,
             DevConfig, NullLogger<PasswordService>.Instance);
 
-        return new AuthService(authSvc, accountSvc, pwdSvc);
+        return new Services(auth, account, password);
     }
 
     // ── Register ──────────────────────────────────────────────────────────────
@@ -154,7 +148,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.RegisterAsync(input);
+        var result = await svc.Auth.RegisterAsync(input);
 
         result.Email.Should().Be(input.Email);
         result.Role.Should().Be("User");
@@ -168,7 +162,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.EmailExistsAsync(input.Email, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var svc = BuildMocked(userRepo);
 
-        await svc.Invoking(s => s.RegisterAsync(input))
+        await svc.Auth.Invoking(s => s.RegisterAsync(input))
             .Should().ThrowAsync<ConflictException>();
     }
 
@@ -184,7 +178,7 @@ public class AuthServiceTests
             .ReturnsAsync(MakeEntity());
         var svc = BuildMocked(userRepo);
 
-        await svc.RegisterAsync(input);
+        await svc.Auth.RegisterAsync(input);
 
         captured.Should().NotBeNull();
         captured!.PasswordHash.Should().NotBe(input.Password);
@@ -198,7 +192,7 @@ public class AuthServiceTests
         var userRepo = new Mock<IUserRepository>();
         var svc = BuildMocked(userRepo);
 
-        await svc.Invoking(s => s.RegisterAsync(input))
+        await svc.Auth.Invoking(s => s.RegisterAsync(input))
             .Should().ThrowAsync<FluentValidation.ValidationException>();
     }
 
@@ -212,7 +206,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" });
+        var result = await svc.Auth.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" });
 
         result.Token.Should().Be("stub-token");
         result.User.Email.Should().Be(entity.Email);
@@ -225,7 +219,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
         var svc = BuildMocked(userRepo);
 
-        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = "nobody@example.com", Password = "Password1!" }))
+        await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = "nobody@example.com", Password = "Password1!" }))
             .Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
@@ -237,7 +231,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
-        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "WrongPassword!" }))
+        await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "WrongPassword!" }))
             .Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
@@ -249,7 +243,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
-        await svc.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" }))
+        await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" }))
             .Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("*deactivated*");
     }
@@ -264,7 +258,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByIdAsync(entity.Id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.GetUserByIdAsync(entity.Id);
+        var result = await svc.Account.GetUserByIdAsync(entity.Id);
 
         result.Should().NotBeNull();
         result!.Email.Should().Be(entity.Email);
@@ -277,7 +271,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetByIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.GetUserByIdAsync(999);
+        var result = await svc.Account.GetUserByIdAsync(999);
 
         result.Should().BeNull();
     }
@@ -292,7 +286,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(entities);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.GetAllUsersAsync();
+        var result = await svc.Account.GetAllUsersAsync();
 
         result.Should().HaveCount(3);
     }
@@ -304,7 +298,7 @@ public class AuthServiceTests
         userRepo.Setup(r => r.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(7);
         var svc = BuildMocked(userRepo);
 
-        var result = await svc.GetUserCountAsync();
+        var result = await svc.Account.GetUserCountAsync();
 
         result.Should().Be(7);
     }
@@ -318,7 +312,7 @@ public class AuthServiceTests
         var user = await SeedUserAsync(db);
         var newName = Fake.Name.FullName();
 
-        var result = await svc.UpdateProfileAsync(user.Id, new UpdateProfileInput { FullName = newName });
+        var result = await svc.Account.UpdateProfileAsync(user.Id, new UpdateProfileInput { FullName = newName });
 
         result.FullName.Should().Be(newName);
     }
@@ -330,7 +324,7 @@ public class AuthServiceTests
         var user = await SeedUserAsync(db);
         var newEmail = Fake.Internet.Email();
 
-        var result = await svc.UpdateProfileAsync(user.Id, new UpdateProfileInput { Email = newEmail });
+        var result = await svc.Account.UpdateProfileAsync(user.Id, new UpdateProfileInput { Email = newEmail });
 
         result.Email.Should().Be(newEmail);
     }
@@ -342,7 +336,7 @@ public class AuthServiceTests
         var existing = await SeedUserAsync(db);
         var target = await SeedUserAsync(db);
 
-        await svc.Invoking(s => s.UpdateProfileAsync(target.Id, new UpdateProfileInput { Email = existing.Email }))
+        await svc.Account.Invoking(s => s.UpdateProfileAsync(target.Id, new UpdateProfileInput { Email = existing.Email }))
             .Should().ThrowAsync<ConflictException>();
     }
 
@@ -351,7 +345,7 @@ public class AuthServiceTests
     {
         var (svc, _) = BuildFullService(nameof(UpdateProfile_UnknownUser_ThrowsNotFoundException));
 
-        await svc.Invoking(s => s.UpdateProfileAsync(9999, new UpdateProfileInput { FullName = "X" }))
+        await svc.Account.Invoking(s => s.UpdateProfileAsync(9999, new UpdateProfileInput { FullName = "X" }))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -363,7 +357,7 @@ public class AuthServiceTests
         var (svc, db) = BuildFullService(nameof(ForgotPassword_KnownUser_IssuesToken));
         var user = await SeedUserAsync(db);
 
-        var response = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
+        var response = await svc.Password.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
         response.ResetToken.Should().NotBeNull();
         response.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
@@ -375,7 +369,7 @@ public class AuthServiceTests
     {
         var (svc, db) = BuildFullService(nameof(ForgotPassword_UnknownUser_DoesNotLeakExistence));
 
-        var response = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = "ghost@example.com" });
+        var response = await svc.Password.ForgotPasswordAsync(new ForgotPasswordInput { Email = "ghost@example.com" });
 
         response.ResetToken.Should().BeNull();
         db.PasswordResetTokens.Should().BeEmpty();
@@ -388,9 +382,9 @@ public class AuthServiceTests
     {
         var (svc, db) = BuildFullService(nameof(ResetPassword_ValidToken_UpdatesPasswordAndConsumesToken));
         var user = await SeedUserAsync(db);
-        var forgot = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
+        var forgot = await svc.Password.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
-        var result = await svc.ResetPasswordAsync(new ResetPasswordInput
+        var result = await svc.Password.ResetPasswordAsync(new ResetPasswordInput
         {
             Token = forgot.ResetToken!,
             NewPassword = "BrandNewPass1!"
@@ -408,7 +402,7 @@ public class AuthServiceTests
     {
         var (svc, _) = BuildFullService(nameof(ResetPassword_InvalidToken_ThrowsUnauthorizedException));
 
-        await svc.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
+        await svc.Password.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
         {
             Token = "not-a-real-token",
             NewPassword = "BrandNewPass1!"
@@ -420,11 +414,11 @@ public class AuthServiceTests
     {
         var (svc, db) = BuildFullService(nameof(ResetPassword_TokenCannotBeReused));
         var user = await SeedUserAsync(db);
-        var forgot = await svc.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
+        var forgot = await svc.Password.ForgotPasswordAsync(new ForgotPasswordInput { Email = user.Email });
 
-        await svc.ResetPasswordAsync(new ResetPasswordInput { Token = forgot.ResetToken!, NewPassword = "First1!" });
+        await svc.Password.ResetPasswordAsync(new ResetPasswordInput { Token = forgot.ResetToken!, NewPassword = "First1!" });
 
-        await svc.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
+        await svc.Password.Invoking(s => s.ResetPasswordAsync(new ResetPasswordInput
         {
             Token = forgot.ResetToken!,
             NewPassword = "Second1!"
@@ -439,7 +433,7 @@ public class AuthServiceTests
         var (svc, db) = BuildFullService(nameof(ToggleUserStatus_ActiveUser_DeactivatesAndReturnsSuccess));
         var user = await SeedUserAsync(db);
 
-        var result = await svc.ToggleUserStatusAsync(user.Id);
+        var result = await svc.Account.ToggleUserStatusAsync(user.Id);
 
         result.Success.Should().BeTrue();
         var refreshed = await db.Users.FindAsync(user.Id);
@@ -454,7 +448,7 @@ public class AuthServiceTests
         user.IsActive = false;
         await db.SaveChangesAsync();
 
-        var result = await svc.ToggleUserStatusAsync(user.Id);
+        var result = await svc.Account.ToggleUserStatusAsync(user.Id);
 
         result.Success.Should().BeTrue();
         var refreshed = await db.Users.FindAsync(user.Id);
@@ -466,7 +460,7 @@ public class AuthServiceTests
     {
         var (svc, _) = BuildFullService(nameof(ToggleUserStatus_UnknownUser_ThrowsNotFoundException));
 
-        await svc.Invoking(s => s.ToggleUserStatusAsync(9999))
+        await svc.Account.Invoking(s => s.ToggleUserStatusAsync(9999))
             .Should().ThrowAsync<NotFoundException>();
     }
 

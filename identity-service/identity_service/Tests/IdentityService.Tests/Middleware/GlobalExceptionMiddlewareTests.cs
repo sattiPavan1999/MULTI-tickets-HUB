@@ -150,7 +150,7 @@ public class GlobalExceptionMiddlewareTests
 
         Assert.NotNull(errorResponse);
         Assert.Equal("INTERNAL_ERROR", errorResponse.ErrorCode);
-        Assert.Equal("An error occurred processing your request", errorResponse.Message);
+        Assert.Equal("An unexpected error occurred", errorResponse.Message);
     }
 
     [Fact]
