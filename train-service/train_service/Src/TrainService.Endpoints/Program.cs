@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using TrainService.Core;
 using TrainService.Core.Data;
 using TrainService.Core.Extensions;
-using TrainService.Endpoints.GraphQL;
 using TrainService.Endpoints.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,12 +11,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddCoreServices(builder.Configuration);
-
-builder.Services
-    .AddGraphQLServer()
-    .AddQueryType<Query>()
-    .AddFiltering()
-    .AddSorting();
 
 builder.Services.AddCors(options =>
 {
@@ -54,6 +47,5 @@ else
     app.UseCors("ProductionCors");
 
 app.MapControllers();
-app.MapGraphQL("/graphql");
 
 app.Run();

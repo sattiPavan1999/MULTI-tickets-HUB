@@ -1,7 +1,6 @@
 using MovieService.Core;
 using MovieService.Core.Data;
 using MovieService.Core.Extensions;
-using MovieService.Endpoints.GraphQL.Queries;
 using MovieService.Endpoints.Middleware;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,12 +11,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddCoreServices(builder.Configuration);
-
-builder.Services
-    .AddGraphQLServer()
-    .AddQueryType<Query>()
-    .AddFiltering()
-    .AddSorting();
 
 builder.Services.AddCors(options =>
 {
@@ -54,6 +47,5 @@ else
     app.UseCors("ProductionCors");
 
 app.MapControllers();
-app.MapGraphQL("/graphql");
 
 app.Run();

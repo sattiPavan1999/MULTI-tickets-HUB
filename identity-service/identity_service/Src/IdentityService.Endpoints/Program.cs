@@ -4,7 +4,6 @@ using IdentityService.Core.Data;
 using IdentityService.Core.Extensions;
 using IdentityService.Core.Models;
 using IdentityService.Core.Repositories;
-using IdentityService.Endpoints.GraphQL;
 using IdentityService.Endpoints.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
@@ -84,14 +83,6 @@ try
 
     builder.Services.AddAuthorization();
 
-    // GraphQL — queries only; writes go through REST
-    builder.Services
-        .AddGraphQLServer()
-        .AddAuthorization()
-        .AddQueryType<Query>()
-        .AddFiltering()
-        .AddSorting();
-
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("DevelopmentCors", policy =>
@@ -157,7 +148,6 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
-    app.MapGraphQL("/graphql");
 
     app.Logger.LogInformation("Identity Service starting");
     app.Run();
