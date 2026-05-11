@@ -11,6 +11,10 @@ public class BookingController(IBookingService bookingService) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<BookingResponse>> Create([FromBody] CreateBookingInput input, CancellationToken ct)
     {
+        if (!int.TryParse(Request.Headers["X-User-Id"].FirstOrDefault(), out var userId) || userId <= 0)
+            return Unauthorized();
+
+        input.UserId = userId;
         var booking = await bookingService.CreateBookingAsync(input, ct);
         return CreatedAtAction(nameof(GetById), new { id = booking.Id }, booking);
     }

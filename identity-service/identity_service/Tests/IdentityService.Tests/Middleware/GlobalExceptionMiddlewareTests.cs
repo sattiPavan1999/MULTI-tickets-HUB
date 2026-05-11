@@ -93,7 +93,7 @@ public class GlobalExceptionMiddlewareTests
         });
 
         Assert.NotNull(errorResponse);
-        Assert.Equal("EMAIL_EXISTS", errorResponse.ErrorCode);
+        Assert.Equal("CONFLICT", errorResponse.ErrorCode);
     }
 
     [Fact]

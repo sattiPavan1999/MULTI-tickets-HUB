@@ -16,6 +16,7 @@ export function TrainsPage() {
   const [sortBy, setSortBy] = useState<SortBy>('');
   const [trains, setTrains] = useState<TrainDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [searched, setSearched] = useState(true);
   const [sameStationError, setSameStationError] = useState(false);
   const [selectedTrain, setSelectedTrain] = useState<TrainDto | null>(null);
@@ -23,7 +24,7 @@ export function TrainsPage() {
   useEffect(() => {
     trainApi.searchTrains()
       .then(setTrains)
-      .catch(() => setTrains([]))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -35,6 +36,7 @@ export function TrainsPage() {
       return;
     }
     setSameStationError(false);
+    setLoadError(false);
     setLoading(true);
     setSearched(true);
     try {
@@ -45,6 +47,7 @@ export function TrainsPage() {
       );
       setTrains(results);
     } catch {
+      setLoadError(true);
       setTrains([]);
     } finally {
       setLoading(false);
@@ -114,6 +117,8 @@ export function TrainsPage() {
       {/* Results */}
       {loading ? (
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
+      ) : loadError ? (
+        <p className="py-20 text-center text-red-400">Failed to load trains. Please try again.</p>
       ) : !searched ? null : trains.length === 0 ? (
         <p className="py-20 text-center text-white/40">No trains found for this route.</p>
       ) : (

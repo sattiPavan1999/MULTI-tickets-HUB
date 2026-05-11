@@ -109,7 +109,7 @@ public class MovieDbContext(DbContextOptions<MovieDbContext> options) : DbContex
 
             entity.Property(e => e.Status)
                 .IsRequired()
-                .HasDefaultValue("Pending");
+                .HasDefaultValue("Confirmed");
 
             entity.Property(e => e.BookedAt)
                 .IsRequired()

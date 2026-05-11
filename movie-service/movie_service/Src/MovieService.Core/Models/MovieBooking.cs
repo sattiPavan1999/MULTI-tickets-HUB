@@ -8,6 +8,6 @@ public class MovieBooking
     public int UserId { get; set; }
     public string SeatNumbers { get; set; } = string.Empty;
     public int NumberOfSeats { get; set; }
-    public string Status { get; set; } = "Pending";
+    public string Status { get; set; } = "Confirmed";
     public DateTime BookedAt { get; set; }
 }

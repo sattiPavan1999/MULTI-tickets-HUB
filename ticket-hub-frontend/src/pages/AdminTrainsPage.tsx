@@ -123,7 +123,7 @@ function SeatAvailabilityModal({ train, onClose }: { train: TrainDto; onClose: (
 function AdminTrainsContent() {
   const { data, loading, refetch } = useQuery(GET_ADMIN_TRAINS);
   const toast = useToast();
-  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; train: TrainDto } | { mode: 'seats'; train: TrainDto }>(null);
+  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; train: TrainDto } | { mode: 'seats'; train: TrainDto } | { mode: 'confirmDelete'; train: TrainDto }>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,10 +170,10 @@ function AdminTrainsContent() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this train?')) return;
     try {
       await adminApi.deleteTrain(id);
       await refetch();
+      setModal(null);
       toast.success('Train deleted');
     } catch {
       toast.error('Failed to delete train');
@@ -233,7 +233,7 @@ function AdminTrainsContent() {
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'edit', train: t })}>Edit</Button>
                       <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'seats', train: t })}>Seats</Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)}>Delete</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'confirmDelete', train: t })}>Delete</Button>
                     </div>
                   </td>
                 </tr>
@@ -262,6 +262,21 @@ function AdminTrainsContent() {
 
       {modal?.mode === 'seats' && (
         <SeatAvailabilityModal train={modal.train} onClose={() => setModal(null)} />
+      )}
+
+      {modal?.mode === 'confirmDelete' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-ink-800 p-8 shadow-2xl">
+            <h2 className="mb-2 font-serif text-xl text-white">Delete Train?</h2>
+            <p className="mb-6 text-sm text-white/50">
+              "{modal.train.trainName} ({modal.train.trainNumber})" will be permanently deleted. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button onClick={() => handleDelete(modal.train.id)}>Delete</Button>
+              <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

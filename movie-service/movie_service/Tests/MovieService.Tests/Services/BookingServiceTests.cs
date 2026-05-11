@@ -2,6 +2,7 @@ using AutoMapper;
 using FluentAssertions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using MovieService.Core.Data;
 using MovieService.Core.DTOs;
@@ -19,12 +20,15 @@ public class BookingServiceTests
     private static IMapper BuildMapper()
         => new MapperConfiguration(c => c.AddProfile<MovieMappingProfile>()).CreateMapper();
 
+    private static DbContextOptions<MovieDbContext> BuildOptions(string dbName) =>
+        new DbContextOptionsBuilder<MovieDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
     private static (IBookingService bookingSvc, IShowtimeService showtimeSvc, MovieDbContext db) BuildFullService(string dbName)
     {
-        var options = new DbContextOptionsBuilder<MovieDbContext>()
-            .UseInMemoryDatabase(dbName)
-            .Options;
-        var db = new MovieDbContext(options);
+        var db = new MovieDbContext(BuildOptions(dbName));
         var movieRepo = new MovieRepository(db, NullLogger<MovieRepository>.Instance);
         var showtimeRepo = new ShowtimeRepository(db, NullLogger<ShowtimeRepository>.Instance);
         var bookingRepo = new BookingRepository(db);
@@ -39,10 +43,9 @@ public class BookingServiceTests
             NullLogger<ShowtimeService>.Instance);
 
         var bookingSvc = new BookingService(
-            bookingRepo,
-            showtimeRepo,
             new CreateBookingInputValidator(),
             mapper,
+            db,
             NullLogger<BookingService>.Instance);
 
         return (bookingSvc, showtimeSvc, db);
@@ -68,9 +71,9 @@ public class BookingServiceTests
     }
 
     [Fact]
-    public async Task CreateBooking_ValidInput_ReturnsPendingBooking()
+    public async Task CreateBooking_ValidInput_ReturnsConfirmedBooking()
     {
-        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(CreateBooking_ValidInput_ReturnsPendingBooking));
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(CreateBooking_ValidInput_ReturnsConfirmedBooking));
         var (_, showtime) = await SeedAsync(db, showtimeSvc);
 
         var result = await bookingSvc.CreateBookingAsync(new CreateBookingInput
@@ -80,7 +83,7 @@ public class BookingServiceTests
             SeatNumbers = [1, 2, 3]
         });
 
-        result.Status.Should().Be("Pending");
+        result.Status.Should().Be("Confirmed");
         result.NumberOfSeats.Should().Be(3);
         result.UserId.Should().Be(42);
         result.SeatNumbers.Should().Be("1,2,3");
@@ -119,10 +122,7 @@ public class BookingServiceTests
     [Fact]
     public async Task CreateBooking_ExceedsAvailableSeats_ThrowsConflictException()
     {
-        var options = new DbContextOptionsBuilder<MovieDbContext>()
-            .UseInMemoryDatabase(nameof(CreateBooking_ExceedsAvailableSeats_ThrowsConflictException))
-            .Options;
-        var db = new MovieDbContext(options);
+        var db = new MovieDbContext(BuildOptions(nameof(CreateBooking_ExceedsAvailableSeats_ThrowsConflictException)));
         var movie = new Movie { Title = "T", Genre = "G", Duration = 100, PosterUrl = "https://example.com/p.jpg" };
         db.Movies.Add(movie);
         var showtime = new Showtime
@@ -137,9 +137,7 @@ public class BookingServiceTests
         db.Showtimes.Add(showtime);
         await db.SaveChangesAsync();
 
-        var showtimeRepo = new ShowtimeRepository(db, NullLogger<ShowtimeRepository>.Instance);
-        var bookingRepo = new BookingRepository(db);
-        var bookingSvc = new BookingService(bookingRepo, showtimeRepo, new CreateBookingInputValidator(), BuildMapper(), NullLogger<BookingService>.Instance);
+        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, NullLogger<BookingService>.Instance);
 
         await bookingSvc.Invoking(s => s.CreateBookingAsync(new CreateBookingInput
         {

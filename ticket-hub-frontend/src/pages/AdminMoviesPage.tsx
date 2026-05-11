@@ -158,7 +158,7 @@ function ShowtimeModal({ movie, onClose }: { movie: MovieDto; onClose: () => voi
 function AdminMoviesContent() {
   const { data, loading, refetch } = useQuery(GET_ADMIN_MOVIES);
   const toast = useToast();
-  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; movie: MovieDto } | { mode: 'showtimes'; movie: MovieDto }>(null);
+  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; movie: MovieDto } | { mode: 'showtimes'; movie: MovieDto } | { mode: 'confirmDelete'; movie: MovieDto }>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,10 +194,10 @@ function AdminMoviesContent() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this movie?')) return;
     try {
       await adminApi.deleteMovie(id);
       await refetch();
+      setModal(null);
       toast.success('Movie deleted');
     } catch {
       toast.error('Failed to delete movie');
@@ -254,7 +254,7 @@ function AdminMoviesContent() {
                       <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'edit', movie: m })}>Edit</Button>
                       <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'showtimes', movie: m })}>Showtimes</Button>
                       <Button size="sm" variant="ghost" onClick={() => handleToggle(m.id)}>{m.isActive ? 'Deactivate' : 'Activate'}</Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(m.id)}>Delete</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'confirmDelete', movie: m })}>Delete</Button>
                     </div>
                   </td>
                 </tr>
@@ -283,6 +283,21 @@ function AdminMoviesContent() {
 
       {modal?.mode === 'showtimes' && (
         <ShowtimeModal movie={modal.movie} onClose={() => setModal(null)} />
+      )}
+
+      {modal?.mode === 'confirmDelete' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-ink-800 p-8 shadow-2xl">
+            <h2 className="mb-2 font-serif text-xl text-white">Delete Movie?</h2>
+            <p className="mb-6 text-sm text-white/50">
+              "{modal.movie.title}" will be permanently deleted. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button onClick={() => handleDelete(modal.movie.id)} isLoading={submitting}>Delete</Button>
+              <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

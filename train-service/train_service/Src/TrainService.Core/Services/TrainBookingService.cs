@@ -109,6 +109,15 @@ public class TrainBookingService(
         if (waitlisted.Count == 0) return;
 
         var first = waitlisted[0];
+
+        // Consume the freed seat for the promoted booking
+        var seat = await seatRepository.GetByTrainAndDateAsync(trainId, date, ct);
+        if (seat is not null && seat.AvailableSeats >= first.NumberOfSeats)
+        {
+            seat.AvailableSeats -= first.NumberOfSeats;
+            await seatRepository.UpsertAsync(seat, ct);
+        }
+
         first.Status = "Confirmed";
         first.WaitlistPosition = null;
         await bookingRepository.UpdateAsync(first, ct);
@@ -120,5 +129,56 @@ public class TrainBookingService(
         }
 
         logger.LogInformation("Promoted PNR={PNR} from Waitlisted to Confirmed for TrainId={TrainId} on {Date}", first.PNR, trainId, date);
+    }
+
+    public async Task<OperationResult> CancelBookingAsync(int bookingId, CancellationToken ct = default)
+    {
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        try
+        {
+            var booking = await bookingRepository.GetByIdAsync(bookingId, ct)
+                ?? throw new NotFoundException($"Booking {bookingId} not found");
+
+            if (booking.Status == "Cancelled")
+                throw new ConflictException("Booking is already cancelled");
+
+            var wasConfirmed = booking.Status == "Confirmed";
+            booking.Status = "Cancelled";
+            booking.WaitlistPosition = null;
+            await bookingRepository.UpdateAsync(booking, ct);
+
+            if (wasConfirmed)
+            {
+                var seat = await seatRepository.GetByTrainAndDateAsync(booking.TrainId, booking.TravelDate, ct);
+                if (seat is not null)
+                {
+                    seat.AvailableSeats += booking.NumberOfSeats;
+                    await seatRepository.UpsertAsync(seat, ct);
+                }
+            }
+            else
+            {
+                // Renumber remaining waitlist positions
+                var remaining = await bookingRepository.GetWaitlistedByTrainAndDateAsync(booking.TrainId, booking.TravelDate, ct);
+                for (var i = 0; i < remaining.Count; i++)
+                {
+                    remaining[i].WaitlistPosition = i + 1;
+                    await bookingRepository.UpdateAsync(remaining[i], ct);
+                }
+            }
+
+            await tx.CommitAsync(ct);
+
+            if (wasConfirmed)
+                await PromoteWaitlistAsync(booking.TrainId, booking.TravelDate, ct);
+
+            logger.LogInformation("Booking {BookingId} cancelled (PNR={PNR})", bookingId, booking.PNR);
+            return new OperationResult { Success = true, Message = "Booking cancelled successfully" };
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
     }
 }

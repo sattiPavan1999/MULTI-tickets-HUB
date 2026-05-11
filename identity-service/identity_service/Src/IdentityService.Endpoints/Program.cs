@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using IdentityService.Core.Data;
 using IdentityService.Core.Extensions;
 using IdentityService.Core.Models;
@@ -6,6 +7,7 @@ using IdentityService.Core.Repositories;
 using IdentityService.Endpoints.GraphQL;
 using IdentityService.Endpoints.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -35,6 +37,18 @@ try
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.AddFixedWindowLimiter("login", opt =>
+        {
+            opt.PermitLimit = 10;
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            opt.QueueLimit = 0;
+        });
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    });
 
     // Core services: DbContext, repositories, services, validators, AutoMapper
     builder.Services.AddCoreServices(builder.Configuration);
@@ -97,16 +111,20 @@ try
     // Seed default admin user
     using (var seedScope = app.Services.CreateScope())
     {
+        var adminPassword = app.Configuration["Admin:DefaultPassword"] ?? "admin";
+        if (!app.Environment.IsDevelopment() && adminPassword == "admin")
+            app.Logger.LogWarning("Using default admin password — set Admin:DefaultPassword env var in production");
+
         var userRepo = seedScope.ServiceProvider.GetRequiredService<IUserRepository>();
         if (!await userRepo.EmailExistsAsync("admin@email.com", CancellationToken.None))
         {
             await userRepo.AddAsync(new User
             {
                 Email = "admin@email.com",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin"),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 FullName = "Admin",
                 PhoneNumber = "0000000000",
-                Role = "Admin",
+                Role = IdentityService.Core.Models.Roles.Admin,
                 IsActive = true
             }, CancellationToken.None);
             app.Logger.LogInformation("Default admin user seeded");
@@ -127,6 +145,7 @@ try
         app.UseCors("ProductionCors");
     }
 
+    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
 

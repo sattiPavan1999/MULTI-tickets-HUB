@@ -4,6 +4,7 @@ using IdentityService.Core.DTOs;
 using IdentityService.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace IdentityService.Endpoints.Controllers;
 
@@ -21,6 +22,7 @@ public class AuthController(IAuthService authService) : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginInput input, CancellationToken ct)
     {
         var response = await authService.LoginAsync(input, ct);

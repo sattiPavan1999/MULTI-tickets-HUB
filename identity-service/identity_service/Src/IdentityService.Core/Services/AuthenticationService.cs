@@ -33,7 +33,7 @@ public class AuthenticationService(
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(input.Password),
             FullName = input.FullName,
             PhoneNumber = input.PhoneNumber,
-            Role = "User"
+            Role = Roles.User
         };
 
         var created = await userRepository.AddAsync(user, ct);

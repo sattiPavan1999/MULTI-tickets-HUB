@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using ApiGateway.Models;
@@ -7,6 +8,8 @@ namespace ApiGateway.Middleware;
 
 public class JwtValidationMiddleware
 {
+    private const string UserIdHeader = "X-User-Id";
+
     private readonly RequestDelegate _next;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<JwtValidationMiddleware> _logger;
@@ -25,9 +28,8 @@ public class JwtValidationMiddleware
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        // Skip JWT validation for public routes and health endpoints
-        if (path.StartsWith("/graphql/auth") ||
-            path == "/api/auth/login" ||
+        // Explicitly public — no token required
+        if (path == "/api/auth/login" ||
             path == "/api/auth/register" ||
             path == "/api/auth/forgot-password" ||
             path == "/api/auth/reset-password" ||
@@ -38,51 +40,47 @@ public class JwtValidationMiddleware
             return;
         }
 
-        // Protected routes require JWT validation
-        if (path.StartsWith("/graphql/trains") ||
-            path.StartsWith("/graphql/movies") ||
-            path.StartsWith("/graphql/admin") ||
-            path.StartsWith("/api/admin"))
+        // All other routes require a valid JWT
+        var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrEmpty(authHeader))
         {
-            var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
-
-            if (string.IsNullOrEmpty(authHeader))
-            {
-                _logger.LogWarning("Authorization header missing for path: {Path}", path);
-                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Authorization header missing");
-                return;
-            }
-
-            if (!authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning("Invalid Authorization header format for path: {Path}", path);
-                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Invalid token format");
-                return;
-            }
-
-            var token = authHeader["Bearer ".Length..].Trim();
-
-            if (!ValidateToken(token, out var validationError, out var role))
-            {
-                _logger.LogWarning("JWT validation failed for path: {Path}. Error: {Error}", path, validationError);
-                await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", validationError);
-                return;
-            }
-
-            // Check role for admin routes
-            if (path.StartsWith("/graphql/admin") || path.StartsWith("/api/admin"))
-            {
-                if (!string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.LogWarning("Insufficient permissions for admin route. User role: {Role}", role);
-                    await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "FORBIDDEN", "Insufficient permissions");
-                    return;
-                }
-            }
-
-            _logger.LogInformation("JWT validation successful for path: {Path}", path);
+            _logger.LogWarning("Authorization header missing for path: {Path}", path);
+            await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Authorization header missing");
+            return;
         }
 
+        if (!authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Invalid Authorization header format for path: {Path}", path);
+            await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Invalid token format");
+            return;
+        }
+
+        var token = authHeader["Bearer ".Length..].Trim();
+
+        if (!ValidateToken(token, out var validationError, out var role, out var userId))
+        {
+            _logger.LogWarning("JWT validation failed for path: {Path}. Error: {Error}", path, validationError);
+            await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", validationError);
+            return;
+        }
+
+        // Inject the authenticated user's ID as a trusted internal header
+        if (!string.IsNullOrEmpty(userId))
+            context.Request.Headers[UserIdHeader] = userId;
+
+        // Admin paths require the Admin role
+        if (path.StartsWith("/graphql/admin") || path.StartsWith("/api/admin"))
+        {
+            if (!string.Equals(role, Roles.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Insufficient permissions for admin route. User role: {Role}", role);
+                await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "FORBIDDEN", "Insufficient permissions");
+                return;
+            }
+        }
+
+        _logger.LogInformation("JWT validation successful for path: {Path}", path);
         await _next(context);
     }
 
@@ -98,10 +96,11 @@ public class JwtValidationMiddleware
         });
     }
 
-    private bool ValidateToken(string token, out string errorMessage, out string? role)
+    private bool ValidateToken(string token, out string errorMessage, out string? role, out string? userId)
     {
         errorMessage = string.Empty;
         role = null;
+        userId = null;
 
         try
         {
@@ -127,10 +126,13 @@ public class JwtValidationMiddleware
                 ClockSkew = TimeSpan.Zero
             };
 
-            var principal = tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
+            var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
 
             role = principal.Claims.FirstOrDefault(c => c.Type == "role")?.Value
-                ?? principal.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
+                ?? principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
+
+            userId = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value
+                ?? principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
             return true;
         }

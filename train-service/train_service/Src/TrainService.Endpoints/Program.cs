@@ -35,8 +35,11 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseMiddleware<CorrelationIdMiddleware>();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseCors("AllowAll");
 

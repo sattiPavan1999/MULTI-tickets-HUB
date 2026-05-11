@@ -33,7 +33,7 @@ public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExcep
             ValidationException ve => (HttpStatusCode.BadRequest, "VALIDATION_ERROR",
                 string.Join("; ", ve.Errors.Select(e => e.ErrorMessage))),
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "UNAUTHORIZED", exception.Message),
-            ConflictException => (HttpStatusCode.Conflict, "EMAIL_EXISTS", exception.Message),
+            ConflictException => (HttpStatusCode.Conflict, "CONFLICT", exception.Message),
             NotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND", exception.Message),
             _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR", "An error occurred processing your request")
         };

@@ -47,11 +47,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = useCallback(async (input: RegisterRequest): Promise<User> => {
     const created = await authApi.register(input);
     // Backend returns the user but no token on register — sign in immediately.
-    const result = await authApi.login({ email: input.email, password: input.password });
-    tokenStorage.set(result.token);
-    userStorage.set(result.user);
-    setToken(result.token);
-    setUser(result.user);
+    try {
+      const result = await authApi.login({ email: input.email, password: input.password });
+      tokenStorage.set(result.token);
+      userStorage.set(result.user);
+      setToken(result.token);
+      setUser(result.user);
+    } catch {
+      // Registration succeeded but auto-login failed; user must sign in manually.
+    }
     return created;
   }, []);
 

@@ -39,6 +39,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:5001/health/live || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     networks:
       - tickethub-network
     restart: unless-stopped
@@ -57,6 +63,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:5003/health/live || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     networks:
       - tickethub-network
     restart: unless-stopped
@@ -75,6 +87,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:5002/health/live || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     networks:
       - tickethub-network
     restart: unless-stopped
@@ -96,9 +114,12 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
     depends_on:
-      - identity-service
-      - movie-service
-      - train-service
+      identity-service:
+        condition: service_healthy
+      movie-service:
+        condition: service_healthy
+      train-service:
+        condition: service_healthy
     networks:
       - tickethub-network
     restart: unless-stopped
@@ -118,10 +139,14 @@ services:
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
       - JwtSettings__TokenExpiryMinutes=60
     depends_on:
-      - identity-service
-      - movie-service
-      - train-service
-      - admin-bff
+      identity-service:
+        condition: service_healthy
+      movie-service:
+        condition: service_healthy
+      train-service:
+        condition: service_healthy
+      admin-bff:
+        condition: service_started
     networks:
       - tickethub-network
     restart: unless-stopped
