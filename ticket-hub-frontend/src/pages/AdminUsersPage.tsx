@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/hooks/useToast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UserRow {
   id: number;
@@ -19,11 +20,12 @@ interface UserRow {
 
 function AdminUsersContent() {
   const { data, loading, refetch } = useQuery<{ users: UserRow[] }>(GET_ADMIN_USERS);
+  const { user: currentUser } = useAuth();
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [confirm, setConfirm] = useState<null | { userId: number; email: string; isActive: boolean }>(null);
 
-  const users: UserRow[] = data?.users ?? [];
+  const users: UserRow[] = (data?.users ?? []).filter((u) => u.id !== currentUser?.id);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

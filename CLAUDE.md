@@ -151,7 +151,7 @@ The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000
       Exceptions/        ConflictException (409), NotFoundException (404)
       Extensions/        CoreServiceExtensions.AddCoreServices() — all DI wired here
       Mapping/           AutoMapper profiles
-      Models/            EF Core entities + Roles constants (Roles.Admin / Roles.User)
+      Models/            EF Core entities + Roles constants (Roles.Admin / Roles.User) + BookingStatus constants (movie/train)
       Repositories/      IBaseRepository<T>, BaseRepository<T>, domain-specific interfaces
       Services/          Service interfaces + implementations
       Validators/        FluentValidation AbstractValidator<T> — one per DTO
@@ -183,6 +183,12 @@ private record Services(IAuthService Auth, IUserAccountService Account, IPasswor
 ```
 `BuildFullService(dbName)` returns `(Services svc, IdentityDbContext db)`; `BuildMocked(userRepo)` returns `Services` only. Tests call `svc.Auth.RegisterAsync(...)`, `svc.Account.GetUserByIdAsync(...)`, etc.
 
+**Authorization on movie/train service controllers**: `MovieController` and `TrainController` have **no `[Authorize]` attributes** — movie-service and train-service have no JWT authentication middleware configured and are internal services called directly by admin-bff without an `Authorization` header. Do NOT add `[Authorize]` to these controllers; it will break admin-bff internal calls. All auth is enforced at the gateway (JWT required for all routes) and at the admin-bff boundary (`[Authorize(Roles = "Admin")]`). The real guard on `BookingController` is the `X-User-Id` header check injected by the gateway.
+
+**Booking controllers** use `StatusCode(201, booking)` rather than `CreatedAtAction` — there is no `GetById` endpoint on either booking controller.
+
+**CORS**: All four services use environment-based CORS — `DevelopmentCors` (`AllowAny`) in Development, `ProductionCors` (`WithOrigins` from `Cors:AllowedOrigins` config) otherwise. The api-gateway uses a fixed `AllowFrontend` policy (`localhost:3000` / `localhost:5173`).
+
 **Shared infrastructure**: `GlobalExceptionMiddleware`, `ErrorResponse`, `NotFoundException`, and `ConflictException` are identical across all four services (namespace aside). Exception classes use primary constructor syntax: `public class NotFoundException(string message) : Exception(message);`. `ErrorResponse` uses `= string.Empty` property defaults and `DateTime.UtcNow` for `Timestamp`. `GlobalExceptionMiddleware` uses `static async`, int status code literals, `context.TraceIdentifier`, and `JsonNamingPolicy.CamelCase` serialization.
 
 ### Domain models
@@ -190,7 +196,7 @@ private record Services(IAuthService Auth, IUserAccountService Account, IPasswor
 **identity-service — `User`**: Id, Email, PasswordHash, FullName, PhoneNumber, Role (`Roles.User`|`Roles.Admin`), IsActive (default `true`), CreatedAt.
 - `IsActive = false` blocks login with `401 UNAUTHORIZED: "Account is deactivated"`
 - Default admin seeded on startup: `admin@email.com`, role `Admin`. Password read from `Admin:DefaultPassword` config key (env var `Admin__DefaultPassword`); falls back to `"admin"` with a startup warning in non-Development environments.
-- Login endpoint is **rate-limited**: 10 requests/minute per IP (ASP.NET Core `AddRateLimiter` fixed-window, policy name `"login"`).
+- Login endpoint is **rate-limited**: 10 req/min per IP (policy `"login"`). ForgotPassword and ResetPassword are rate-limited at 5 req/min (policy `"password-reset"`). Both policies use ASP.NET Core `AddRateLimiter` fixed-window.
 
 **movie-service — `Movie`**: Id, Title, Genre, Duration (minutes), PosterUrl, IsActive (default `true`), CreatedAt. 5 seed movies. Has nav property `ICollection<Showtime> Showtimes`.
 
@@ -212,7 +218,7 @@ private record Services(IAuthService Auth, IUserAccountService Account, IPasswor
 - **Booking closes 1 hour before departure**: throws `ConflictException` if `DateTime.UtcNow >= train.DepartureTime.AddHours(-1)`
 - Seats available → `Confirmed`; seats = 0 → `Waitlisted` with sequential position; partial (0 < available < requested) → `ConflictException`
 - Max 6 seats per booking
-- `CancelBookingAsync(bookingId)` — `DELETE /api/trains/bookings/{id}`: cancels a booking, frees seats for Confirmed cancellations, renumbers the waitlist for Waitlisted cancellations. After committing, calls `PromoteWaitlistAsync` which promotes the first waitlisted booking to Confirmed **and decrements `AvailableSeats`** for the promoted booking.
+- `CancelBookingAsync(bookingId)` — `DELETE /api/trains/bookings/{id}`: cancels a booking, frees seats for Confirmed cancellations, renumbers the waitlist for Waitlisted cancellations. For Confirmed cancellations, calls `PromoteWaitlistAsync` **inside the same transaction before commit** — promotion is atomic with the cancellation. `PromoteWaitlistAsync` promotes the first waitlisted booking to Confirmed and decrements `AvailableSeats`.
 
 ### DI registration pattern
 

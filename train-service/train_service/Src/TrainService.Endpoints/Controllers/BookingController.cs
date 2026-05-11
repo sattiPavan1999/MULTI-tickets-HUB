@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TrainService.Core.DTOs;
 using TrainService.Core.Services;
@@ -7,7 +6,6 @@ namespace TrainService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/trains/bookings")]
-[Authorize]
 public class BookingController(ITrainBookingService bookingService) : ControllerBase
 {
     [HttpPost]

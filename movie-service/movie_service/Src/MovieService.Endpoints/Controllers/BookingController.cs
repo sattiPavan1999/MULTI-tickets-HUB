@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MovieService.Core.DTOs;
 using MovieService.Core.Services;
@@ -7,7 +6,6 @@ namespace MovieService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/movies/bookings")]
-[Authorize]
 public class BookingController(IBookingService bookingService) : ControllerBase
 {
     [HttpPost]
