@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApolloProvider, useQuery } from '@apollo/client/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { adminApolloClient } from '@/services/graphql/adminApolloClient';
 import { GET_ADMIN_MOVIES } from '@/services/graphql/adminQueries';
-import { adminApi, type MovieDto } from '@/services/api/adminApi';
+import { adminApi, type MovieDto, type ShowtimeDto } from '@/services/api/adminApi';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
@@ -18,7 +18,15 @@ const movieSchema = z.object({
   posterUrl: z.string().min(1, 'Poster URL is required').max(500),
 });
 
+const showtimeSchema = z.object({
+  showDate: z.string().min(1, 'Date is required'),
+  showTime: z.string().min(1, 'Time is required'),
+  screenNumber: z.string().min(1, 'Screen is required').max(100),
+  totalSeats: z.number().int().positive('Total seats must be positive'),
+});
+
 type MovieFormData = z.infer<typeof movieSchema>;
+type ShowtimeFormData = z.infer<typeof showtimeSchema>;
 
 interface MovieFormProps {
   defaultValues?: MovieFormData;
@@ -47,10 +55,110 @@ function MovieForm({ defaultValues, onSubmit, onCancel, isLoading }: MovieFormPr
   );
 }
 
+function ShowtimeModal({ movie, onClose }: { movie: MovieDto; onClose: () => void }) {
+  const toast = useToast();
+  const [showtimes, setShowtimes] = useState<ShowtimeDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<ShowtimeFormData>({
+    resolver: zodResolver(showtimeSchema),
+    defaultValues: { totalSeats: 50 },
+  });
+
+  const loadShowtimes = () => {
+    setLoading(true);
+    adminApi.getMovieShowtimes(movie.id)
+      .then(setShowtimes)
+      .catch(() => toast.error('Failed to load showtimes'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadShowtimes(); }, [movie.id]);
+
+  const handleCreate = async (data: ShowtimeFormData) => {
+    setSubmitting(true);
+    try {
+      await adminApi.createMovieShowtime(movie.id, data);
+      loadShowtimes();
+      reset({ totalSeats: 50 });
+      toast.success('Showtime created');
+    } catch (err: unknown) {
+      const message = (err as { message?: string })?.message || 'Failed to create showtime';
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this showtime?')) return;
+    try {
+      await adminApi.deleteMovieShowtime(id);
+      loadShowtimes();
+      toast.success('Showtime deleted');
+    } catch {
+      toast.error('Failed to delete showtime');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-ink-800 p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <h2 className="mb-1 font-serif text-2xl text-white">Showtimes</h2>
+        <p className="mb-6 text-sm text-white/50">{movie.title}</p>
+
+        {loading ? <div className="flex justify-center py-4"><Spinner /></div> : (
+          <div className="mb-6 rounded-xl border border-white/10 overflow-hidden">
+            <table className="w-full text-sm text-white">
+              <thead className="bg-ink-700/50 text-white/50 text-xs uppercase">
+                <tr>
+                  <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Time</th>
+                  <th className="px-4 py-2 text-left">Screen</th>
+                  <th className="px-4 py-2 text-right">Seats</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {showtimes.map((s) => (
+                  <tr key={s.id}>
+                    <td className="px-4 py-2">{s.showDate}</td>
+                    <td className="px-4 py-2">{s.showTime}</td>
+                    <td className="px-4 py-2 text-white/60">{s.screenNumber}</td>
+                    <td className="px-4 py-2 text-right text-white/60">{s.availableSeats}/{s.totalSeats}</td>
+                    <td className="px-4 py-2 text-right">
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(s.id)}>Delete</Button>
+                    </td>
+                  </tr>
+                ))}
+                {showtimes.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-white/30">No showtimes yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(handleCreate)} className="flex flex-col gap-4">
+          <h3 className="text-sm font-semibold text-white/70 uppercase tracking-widest">Add Showtime</h3>
+          <Input label="Date" type="date" error={errors.showDate?.message} {...register('showDate')} />
+          <Input label="Time" type="time" error={errors.showTime?.message} {...register('showTime')} />
+          <Input label="Screen" error={errors.screenNumber?.message} placeholder="e.g. Screen 1" {...register('screenNumber')} />
+          <Input label="Total Seats" type="number" error={errors.totalSeats?.message} {...register('totalSeats', { valueAsNumber: true })} />
+          <div className="flex gap-3">
+            <Button type="submit" isLoading={submitting}>Add</Button>
+            <Button variant="secondary" onClick={onClose}>Close</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function AdminMoviesContent() {
   const { data, loading, refetch } = useQuery(GET_ADMIN_MOVIES);
   const toast = useToast();
-  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; movie: MovieDto }>(null);
+  const [modal, setModal] = useState<null | { mode: 'create' } | { mode: 'edit'; movie: MovieDto } | { mode: 'showtimes'; movie: MovieDto }>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,6 +252,7 @@ function AdminMoviesContent() {
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'edit', movie: m })}>Edit</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setModal({ mode: 'showtimes', movie: m })}>Showtimes</Button>
                       <Button size="sm" variant="ghost" onClick={() => handleToggle(m.id)}>{m.isActive ? 'Deactivate' : 'Activate'}</Button>
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(m.id)}>Delete</Button>
                     </div>
@@ -158,7 +267,7 @@ function AdminMoviesContent() {
         </div>
       )}
 
-      {modal && (
+      {(modal?.mode === 'create' || modal?.mode === 'edit') && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-ink-800 p-8 shadow-2xl">
             <h2 className="mb-6 font-serif text-2xl text-white">{modal.mode === 'create' ? 'Add Movie' : 'Edit Movie'}</h2>
@@ -170,6 +279,10 @@ function AdminMoviesContent() {
             />
           </div>
         </div>
+      )}
+
+      {modal?.mode === 'showtimes' && (
+        <ShowtimeModal movie={modal.movie} onClose={() => setModal(null)} />
       )}
     </div>
   );

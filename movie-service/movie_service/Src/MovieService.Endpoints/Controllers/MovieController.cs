@@ -6,7 +6,7 @@ namespace MovieService.Endpoints.Controllers;
 
 [ApiController]
 [Route("api/movies")]
-public class MovieController(IMovieService movieService) : ControllerBase
+public class MovieController(IMovieService movieService, IShowtimeService showtimeService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<MovieResponse>>> GetAll([FromQuery] bool? activeOnly, CancellationToken ct)
@@ -51,5 +51,36 @@ public class MovieController(IMovieService movieService) : ControllerBase
     {
         var result = await movieService.ToggleMovieStatusAsync(id, ct);
         return Ok(result);
+    }
+
+    // ── Showtime endpoints ────────────────────────────────────────────────────
+
+    [HttpGet("{movieId:int}/showtimes")]
+    public async Task<ActionResult<List<ShowtimeResponse>>> GetShowtimes(int movieId, CancellationToken ct)
+    {
+        var showtimes = await showtimeService.GetShowtimesByMovieAsync(movieId, ct);
+        return Ok(showtimes);
+    }
+
+    [HttpPost("{movieId:int}/showtimes")]
+    public async Task<ActionResult<ShowtimeResponse>> CreateShowtime(int movieId, [FromBody] CreateShowtimeInput input, CancellationToken ct)
+    {
+        input.MovieId = movieId;
+        var showtime = await showtimeService.CreateShowtimeAsync(input, ct);
+        return CreatedAtAction(nameof(GetById), new { id = showtime.Id }, showtime);
+    }
+
+    [HttpGet("showtimes/{id:int}/seats")]
+    public async Task<ActionResult<SeatStatusResponse>> GetSeatStatus(int id, CancellationToken ct)
+    {
+        var status = await showtimeService.GetSeatStatusAsync(id, ct);
+        return Ok(status);
+    }
+
+    [HttpDelete("showtimes/{id:int}")]
+    public async Task<IActionResult> DeleteShowtime(int id, CancellationToken ct)
+    {
+        await showtimeService.DeleteShowtimeAsync(id, ct);
+        return NoContent();
     }
 }

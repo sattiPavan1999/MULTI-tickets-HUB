@@ -76,6 +76,7 @@ cp .env.example .env   # sets VITE_API_URL=http://localhost:5000
 npm install
 npm run dev            # http://localhost:5173
 npm run lint           # tsc type-check only (no ESLint) — vite.config.ts has a pre-existing TS2769 error unrelated to app code
+npm run build          # tsc -b && vite build
 npm test               # vitest run (single pass)
 npm run test:watch     # vitest watch mode
 ```
@@ -100,7 +101,7 @@ npm run test:watch     # vitest watch mode
 
 The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000`). Route types:
 
-1. **REST pass-through** — `/api/auth/{**catch-all}` → `identity-service:5001`. Public: `/login`, `/register`, `/forgot-password`, `/reset-password`. Admin-only: `GET /api/auth/users`, `PUT /api/auth/users/{id}/toggle-status`.
+1. **REST pass-through** — `/api/auth/{**catch-all}` → `identity-service:5001`. Public: `/login`, `/register`, `/forgot-password`, `/reset-password`. Protected: `PUT /api/auth/profile`. Admin-only: `GET /api/auth/users`, `PUT /api/auth/users/{id}/toggle-status`.
 
 2. **Admin REST** — `/api/admin/{**catch-all}` → `admin-bff:5004`. Requires valid JWT + `role == "Admin"` (enforced at gateway). Controllers: `AdminMovieController`, `AdminTrainController`, `AdminUserController`.
 
@@ -111,6 +112,8 @@ The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000
    - `/graphql/admin/**` → `admin-bff:5004/graphql` — requires `role == "Admin"`
 
 `JwtValidationMiddleware` in the gateway enforces auth on all paths except the public whitelist. Admin role is required for `/graphql/admin/**` and `/api/admin/**`.
+
+**GraphQL is read-only across all services** — all mutations (create, update, delete) are REST endpoints. GraphQL queries: identity-service exposes `getMe`, `getUser`, `getUsers`, `getUserCount`; movie-service exposes `getMovies`, `getMovie`; train-service exposes `getTrains`, `getTrain`; admin-bff exposes aggregate `getUsers`, `getMovies`, `getTrains` (fans out to downstream services).
 
 ### Admin BFF architecture
 
@@ -146,6 +149,7 @@ The frontend calls the **api-gateway only** (`VITE_API_URL=http://localhost:5000
   Tests/
     <Service>.Tests/
       Controllers/       Mock service; pass CancellationToken.None explicitly
+      GraphQL/           HotChocolate query tests
       Services/          EF InMemory (BuildFullService) + Moq (BuildMocked) + Bogus
       Models/            FluentValidation TestHelper (TestValidate/ShouldHaveValidationErrorFor)
       Repositories/      Testcontainers PostgreSQL
@@ -195,6 +199,8 @@ Repository tests share one Postgres container via `[Collection("postgres")]` + `
 - Uses `DOCKER_HOST` env var (falls back to `/var/run/docker.sock`) — works with both Colima and Docker Desktop. Run `colima start` if Docker isn't responding.
 - `PostgreSqlBuilder()` emits CS0618 deprecation warning in Testcontainers v4.11 — known, harmless
 
+See `REPOSITORY_TESTS_SETUP.md` at the repo root for detailed Testcontainers troubleshooting.
+
 ### Cross-service auth
 
 `JwtSettings__SecretKey`, `Issuer`, `Audience` are shared by `identity-service`, `api-gateway`, and `admin-bff`. All three read from the same env vars in `docker-compose.yml`. `appsettings.json` contains a placeholder; always override via environment.
@@ -202,19 +208,27 @@ Repository tests share one Postgres container via `[Collection("postgres")]` + `
 ### Frontend architecture
 
 `ticket-hub-frontend/src/`:
-- **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage`), `ToastContext` (`.success()`, `.error()`, `.info()` — not `showToast`)
+- **`context/`** — `AuthContext` (login/register/logout/updateProfile, persists token + user to `localStorage` under keys `tickethub.token` / `tickethub.user`), `ToastContext` (`.success()`, `.error()`, `.info()` — not `showToast`)
+- **`hooks/`** — `useAuth.ts`, `useToast.ts` (thin wrappers that call `useContext`)
+- **`layouts/`** — `AuthLayout.tsx`, `DashboardLayout.tsx`
 - **`services/api/client.ts`** — Axios instance; auto-injects Bearer token; redirects to `/auth` on 401
+- **`services/api/authApi.ts`** — Auth REST calls (login, register, profile update, password reset)
 - **`services/api/adminApi.ts`** — All admin REST mutations (`/api/admin/movies`, `/api/admin/trains`, `/api/admin/users`)
 - **`services/graphql/apolloClient.ts`** — Apollo Client v4; points to `/graphql/auth`; wraps app in `App.tsx`
 - **`services/graphql/adminApolloClient.ts`** — Separate Apollo Client v4 instance pointing to `/graphql/admin`; used inside admin pages wrapped in their own `<ApolloProvider>`
+- **`services/graphql/adminQueries.ts`** — GraphQL query documents for admin Apollo client
 - **`routes/`** — `ProtectedRoute` (redirects unauthenticated), `PublicOnlyRoute`, `AdminRoute` (requires `user.role === 'Admin'`; redirects non-admins to `/dashboard`)
-- **`pages/`** — `AuthPage`, `DashboardPage` (shows Admin Panel card when `role === 'Admin'`), `ProfilePage`, admin pages: `AdminDashboardPage`, `AdminMoviesPage`, `AdminTrainsPage`, `AdminUsersPage`
+- **`pages/`** — `AuthPage`, `DashboardPage` (shows Admin Panel card when `role === 'Admin'`), `ProfilePage`, `ResetPasswordPage`, `NotFoundPage`, `PlaceholderServicePage`, admin pages: `AdminDashboardPage`, `AdminMoviesPage`, `AdminTrainsPage`, `AdminUsersPage`
+- **`types/`** — shared TypeScript interfaces
+- **`utils/`** — validation helpers, storage helpers, `cn` class utility
 
 **Admin pages** use `<ApolloProvider client={adminApolloClient}>` at the page root. `useQuery` and `ApolloProvider` are imported from `@apollo/client/react` (not `@apollo/client`). GraphQL `data` is untyped — cast via `(data as any)?.fieldName`. Toast calls use `.success()` / `.error()` directly from `useToast()`.
 
 **React Hook Form + Zod**: use `{ valueAsNumber: true }` in `register()` for numeric inputs instead of `z.coerce.number()` (Zod v4 coerce produces `unknown` type, breaking the resolver).
 
 **`DateTime` fields** from `datetime-local` inputs arrive as strings like `"2026-05-15T08:00"` with `DateTimeKind.Unspecified`. Before persisting to Postgres `timestamptz` columns, always call `DateTime.SpecifyKind(value, DateTimeKind.Utc)`.
+
+**Routing** uses React Router v6. Route tree is defined in `routes/AppRoutes.tsx`.
 
 ### Frontend test setup
 
@@ -226,7 +240,7 @@ Mocking: `vi.hoisted(() => vi.fn())` for values referenced inside `vi.mock` fact
 
 ## Feature implementation reference
 
-Always consult `dotnet-architecture-reference.md` at the repo root before adding new entities, repositories, services, endpoints, GraphQL queries, or frontend components. It defines the exact patterns for this codebase.
+Consult `dotnet-architecture-reference.md` at the repo root before adding new entities, repositories, services, endpoints, GraphQL queries, or frontend components — it defines the exact patterns for this codebase. **Note:** sections on Azure Functions, Casbin authorization, OData, Serilog, and Next.js in that document do not apply to this project; use the patterns in sections 2–4 and 10 only.
 
 ## Workflow rules
 

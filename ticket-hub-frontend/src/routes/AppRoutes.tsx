@@ -5,6 +5,7 @@ import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { PlaceholderServicePage } from '@/pages/PlaceholderServicePage';
+import { MoviesPage } from '@/pages/MoviesPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { AdminMoviesPage } from '@/pages/AdminMoviesPage';
@@ -41,15 +42,7 @@ export function AppRoutes() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route
-            path="/movies"
-            element={
-              <PlaceholderServicePage
-                title="Movie tickets"
-                description="The movie booking experience is on its way. Check back soon for showtimes, seat selection, and instant tickets."
-              />
-            }
-          />
+          <Route path="/movies" element={<MoviesPage />} />
           <Route
             path="/trains"
             element={

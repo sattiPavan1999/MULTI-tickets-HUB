@@ -21,10 +21,17 @@ public static class CoreServiceExtensions
             options.UseNpgsql(connectionString));
 
         services.AddScoped<IMovieRepository, MovieRepository>();
+        services.AddScoped<IShowtimeRepository, ShowtimeRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
+
         services.AddScoped<IMovieService, MovieService.Core.Services.MovieService>();
+        services.AddScoped<IShowtimeService, ShowtimeService>();
+        services.AddScoped<IBookingService, BookingService>();
 
         services.AddScoped<IValidator<DTOs.CreateMovieInput>, CreateMovieInputValidator>();
         services.AddScoped<IValidator<DTOs.UpdateMovieInput>, UpdateMovieInputValidator>();
+        services.AddScoped<IValidator<DTOs.CreateShowtimeInput>, CreateShowtimeInputValidator>();
+        services.AddScoped<IValidator<DTOs.CreateBookingInput>, CreateBookingInputValidator>();
 
         services.AddAutoMapper(typeof(MovieMappingProfile).Assembly);
 

@@ -9,5 +9,7 @@ public class MovieMappingProfile : Profile
     public MovieMappingProfile()
     {
         CreateMap<Movie, MovieResponse>();
+        CreateMap<Showtime, ShowtimeResponse>();
+        CreateMap<MovieBooking, BookingResponse>();
     }
 }

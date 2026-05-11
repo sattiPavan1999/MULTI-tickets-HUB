@@ -9,4 +9,5 @@ public class Movie
     public required string PosterUrl { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+    public ICollection<Showtime> Showtimes { get; set; } = [];
 }

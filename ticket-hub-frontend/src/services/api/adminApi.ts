@@ -32,6 +32,24 @@ export interface AdminOperationResult {
   message: string;
 }
 
+export interface ShowtimeDto {
+  id: number;
+  movieId: number;
+  showDate: string;
+  showTime: string;
+  screenNumber: string;
+  totalSeats: number;
+  availableSeats: number;
+  createdAt: string;
+}
+
+export interface CreateShowtimeData {
+  showDate: string;
+  showTime: string;
+  screenNumber: string;
+  totalSeats: number;
+}
+
 export const adminApi = {
   // Movies
   createMovie: (data: { title: string; genre: string; duration: number; posterUrl: string }) =>
@@ -61,6 +79,16 @@ export const adminApi = {
 
   updateSeatAvailability: (id: number, data: { date: string; availableSeats: number }) =>
     apiClient.put<SeatAvailabilityDto>(`/api/admin/trains/${id}/seat-availability`, data).then((r) => r.data),
+
+  // Showtimes
+  getMovieShowtimes: (movieId: number) =>
+    apiClient.get<ShowtimeDto[]>(`/api/admin/movies/${movieId}/showtimes`).then((r) => r.data),
+
+  createMovieShowtime: (movieId: number, data: CreateShowtimeData) =>
+    apiClient.post<ShowtimeDto>(`/api/admin/movies/${movieId}/showtimes`, data).then((r) => r.data),
+
+  deleteMovieShowtime: (id: number) =>
+    apiClient.delete(`/api/admin/movies/showtimes/${id}`),
 
   // Users
   toggleUserStatus: (id: number) =>

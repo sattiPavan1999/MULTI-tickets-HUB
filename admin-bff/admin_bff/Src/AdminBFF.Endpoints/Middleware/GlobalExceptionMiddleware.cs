@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AdminBFF.Core.DTOs;
+using AdminBFF.Core.Exceptions;
 
 namespace AdminBFF.Endpoints.Middleware;
 
@@ -22,6 +23,7 @@ public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExcep
     {
         var (statusCode, errorCode, message) = ex switch
         {
+            ProxyException pex => (pex.StatusCode, $"HTTP_{pex.StatusCode}", pex.Message),
             UnauthorizedAccessException => (401, "UNAUTHORIZED", ex.Message),
             _ => (500, "INTERNAL_ERROR", "An unexpected error occurred")
         };
