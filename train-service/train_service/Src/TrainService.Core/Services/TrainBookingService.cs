@@ -19,22 +19,22 @@ public class TrainBookingService(
     TrainDbContext dbContext,
     ILogger<TrainBookingService> logger) : ITrainBookingService
 {
-    public async Task<TrainBookingResponse> CreateBookingAsync(CreateTrainBookingInput input, CancellationToken ct = default)
+    public async Task<TrainBookingResponse> CreateBookingAsync(CreateTrainBookingInput input)
     {
-        await validator.ValidateAndThrowAsync(input, ct);
+        await validator.ValidateAndThrowAsync(input);
 
         var travelDate = DateOnly.ParseExact(input.TravelDate, "yyyy-MM-dd");
 
-        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         try
         {
-            var train = await dbContext.Trains.FindAsync([input.TrainId], ct)
+            var train = await dbContext.Trains.FindAsync([input.TrainId])
                 ?? throw new NotFoundException($"Train {input.TrainId} not found.");
 
             if (DateTime.UtcNow >= train.DepartureTime.AddHours(-1))
                 throw new ConflictException("Booking is closed. Train departs within 1 hour or has already departed.");
 
-            var seat = await seatRepository.GetByTrainAndDateAsync(input.TrainId, travelDate, ct)
+            var seat = await seatRepository.GetByTrainAndDateAsync(input.TrainId, travelDate)
                 ?? throw new NotFoundException($"No seat availability found for train {input.TrainId} on {input.TravelDate}. Please select a date configured by the admin.");
 
             var pnr = "PNR" + Guid.NewGuid().ToString("N").ToUpper()[..8];
@@ -63,7 +63,7 @@ public class TrainBookingService(
             else if (seat.AvailableSeats == 0)
             {
                 var waitlistCount = await dbContext.Bookings
-                    .CountAsync(b => b.TrainId == input.TrainId && b.TravelDate == travelDate && b.Status == BookingStatus.Waitlisted, ct);
+                    .CountAsync(b => b.TrainId == input.TrainId && b.TravelDate == travelDate && b.Status == BookingStatus.Waitlisted);
 
                 booking = new TrainBooking
                 {
@@ -85,30 +85,30 @@ public class TrainBookingService(
             }
 
             dbContext.Bookings.Add(booking);
-            await dbContext.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+            await dbContext.SaveChangesAsync();
+            await tx.CommitAsync();
 
             logger.LogInformation("Booking created: PNR={PNR}, Status={Status}, TrainId={TrainId}", booking.PNR, booking.Status, booking.TrainId);
             return mapper.Map<TrainBookingResponse>(booking);
         }
         catch (DbUpdateException)
         {
-            await tx.RollbackAsync(ct);
+            await tx.RollbackAsync();
             throw new ConflictException("Seats filled — another booking completed first. Please try again.");
         }
         catch
         {
-            await tx.RollbackAsync(ct);
+            await tx.RollbackAsync();
             throw;
         }
     }
 
-    public async Task<OperationResult> CancelBookingAsync(int bookingId, CancellationToken ct = default)
+    public async Task<OperationResult> CancelBookingAsync(int bookingId)
     {
-        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         try
         {
-            var booking = await bookingRepository.GetByIdAsync(bookingId, ct)
+            var booking = await bookingRepository.GetByIdAsync(bookingId)
                 ?? throw new NotFoundException($"Booking {bookingId} not found");
 
             if (booking.Status == BookingStatus.Cancelled)
@@ -121,7 +121,7 @@ public class TrainBookingService(
 
             if (wasConfirmed)
             {
-                var seat = await seatRepository.GetByTrainAndDateAsync(booking.TrainId, booking.TravelDate, ct);
+                var seat = await seatRepository.GetByTrainAndDateAsync(booking.TrainId, booking.TravelDate);
                 if (seat is not null)
                 {
                     seat.AvailableSeats += booking.NumberOfSeats;
@@ -129,37 +129,37 @@ public class TrainBookingService(
                 }
                 // PromoteWaitlistAsync flushes all pending changes (cancellation + seat free + promotion)
                 // in a single SaveChangesAsync call
-                await PromoteWaitlistAsync(booking.TrainId, booking.TravelDate, ct);
+                await PromoteWaitlistAsync(booking.TrainId, booking.TravelDate);
             }
             else
             {
-                var remaining = await bookingRepository.GetWaitlistedByTrainAndDateAsync(booking.TrainId, booking.TravelDate, ct);
+                var remaining = await bookingRepository.GetWaitlistedByTrainAndDateAsync(booking.TrainId, booking.TravelDate);
                 for (var i = 0; i < remaining.Count; i++)
                     remaining[i].WaitlistPosition = i + 1;
                 dbContext.Bookings.UpdateRange(remaining);
-                await dbContext.SaveChangesAsync(ct);
+                await dbContext.SaveChangesAsync();
             }
 
-            await tx.CommitAsync(ct);
+            await tx.CommitAsync();
 
             logger.LogInformation("Booking {BookingId} cancelled (PNR={PNR})", bookingId, booking.PNR);
             return new OperationResult { Success = true, Message = "Booking cancelled successfully" };
         }
         catch
         {
-            await tx.RollbackAsync(ct);
+            await tx.RollbackAsync();
             throw;
         }
     }
 
-    public async Task PromoteWaitlistAsync(int trainId, DateOnly date, CancellationToken ct = default)
+    public async Task PromoteWaitlistAsync(int trainId, DateOnly date)
     {
-        var waitlisted = await bookingRepository.GetWaitlistedByTrainAndDateAsync(trainId, date, ct);
+        var waitlisted = await bookingRepository.GetWaitlistedByTrainAndDateAsync(trainId, date);
         if (waitlisted.Count == 0) return;
 
         var first = waitlisted[0];
 
-        var seat = await seatRepository.GetByTrainAndDateAsync(trainId, date, ct);
+        var seat = await seatRepository.GetByTrainAndDateAsync(trainId, date);
         if (seat is not null && seat.AvailableSeats >= first.NumberOfSeats)
         {
             seat.AvailableSeats -= first.NumberOfSeats;
@@ -175,7 +175,7 @@ public class TrainBookingService(
         if (waitlisted.Count > 1)
             dbContext.Bookings.UpdateRange(waitlisted.Skip(1));
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync();
         logger.LogInformation("Promoted PNR={PNR} from Waitlisted to Confirmed for TrainId={TrainId} on {Date}", first.PNR, trainId, date);
     }
 }

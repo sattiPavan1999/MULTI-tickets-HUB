@@ -6,13 +6,13 @@ namespace TrainService.Core.Repositories;
 
 public class SeatAvailabilityRepository(TrainDbContext context) : ISeatAvailabilityRepository
 {
-    public async Task<List<SeatAvailability>> GetByTrainAsync(int trainId, CancellationToken ct = default)
-        => await context.SeatAvailabilities.Where(s => s.TrainId == trainId).ToListAsync(ct);
+    public async Task<List<SeatAvailability>> GetByTrainAsync(int trainId)
+        => await context.SeatAvailabilities.Where(s => s.TrainId == trainId).ToListAsync();
 
-    public async Task<SeatAvailability?> GetByTrainAndDateAsync(int trainId, DateOnly date, CancellationToken ct = default)
-        => await context.SeatAvailabilities.FirstOrDefaultAsync(s => s.TrainId == trainId && s.Date == date, ct);
+    public async Task<SeatAvailability?> GetByTrainAndDateAsync(int trainId, DateOnly date)
+        => await context.SeatAvailabilities.FirstOrDefaultAsync(s => s.TrainId == trainId && s.Date == date);
 
-    public async Task<SeatAvailability> UpsertAsync(SeatAvailability availability, CancellationToken ct = default)
+    public async Task<SeatAvailability> UpsertAsync(SeatAvailability availability)
     {
         // Check change tracker first — if the entity was loaded earlier in the same unit of work
         // (e.g. from GetByTrainAndDateAsync in the booking transaction) it's already tracked
@@ -23,14 +23,14 @@ public class SeatAvailabilityRepository(TrainDbContext context) : ISeatAvailabil
         if (tracked is not null)
         {
             tracked.Entity.AvailableSeats = availability.AvailableSeats;
-            await context.SaveChangesAsync(ct);
+            await context.SaveChangesAsync();
             return tracked.Entity;
         }
 
-        var existing = await GetByTrainAndDateAsync(availability.TrainId, availability.Date, ct);
+        var existing = await GetByTrainAndDateAsync(availability.TrainId, availability.Date);
         if (existing is null)
         {
-            await context.SeatAvailabilities.AddAsync(availability, ct);
+            await context.SeatAvailabilities.AddAsync(availability);
         }
         else
         {
@@ -38,7 +38,7 @@ public class SeatAvailabilityRepository(TrainDbContext context) : ISeatAvailabil
             context.SeatAvailabilities.Update(existing);
             availability = existing;
         }
-        await context.SaveChangesAsync(ct);
+        await context.SaveChangesAsync();
         return availability;
     }
 }

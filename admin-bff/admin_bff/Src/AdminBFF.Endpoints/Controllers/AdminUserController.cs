@@ -14,7 +14,7 @@ namespace AdminBFF.Endpoints.Controllers;
 public class AdminUserController(IIdentityService identityService, IHttpContextAccessor httpContextAccessor) : ControllerBase
 {
     [HttpPut("{id:int}/toggle-status")]
-    public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id, CancellationToken ct)
+    public async Task<ActionResult<OperationResult>> ToggleUserStatus(int id)
     {
         var callerIdClaim = httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? httpContextAccessor.HttpContext?.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -23,7 +23,7 @@ public class AdminUserController(IIdentityService identityService, IHttpContextA
             throw new ProxyException(409, "Administrators cannot toggle their own account status");
 
         var token = ExtractToken();
-        var result = await identityService.ToggleUserStatusAsync(id, token, ct);
+        var result = await identityService.ToggleUserStatusAsync(id, token);
         return Ok(result);
     }
 

@@ -58,7 +58,7 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task AddAsync_PersistsBooking()
     {
-        var booking = await _repo.AddAsync(MakeBooking(), CancellationToken.None);
+        var booking = await _repo.AddAsync(MakeBooking());
 
         booking.Id.Should().BeGreaterThan(0);
         booking.Status.Should().Be("Pending");
@@ -68,10 +68,10 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetByShowtimeAsync_ReturnsPendingAndConfirmed()
     {
-        await _repo.AddAsync(MakeBooking("1,2", "Pending"), CancellationToken.None);
-        await _repo.AddAsync(MakeBooking("3,4", "Confirmed"), CancellationToken.None);
+        await _repo.AddAsync(MakeBooking("1,2", "Pending"));
+        await _repo.AddAsync(MakeBooking("3,4", "Confirmed"));
 
-        var result = await _repo.GetByShowtimeAsync(_showtime.Id, CancellationToken.None);
+        var result = await _repo.GetByShowtimeAsync(_showtime.Id);
 
         result.Should().HaveCount(2);
     }
@@ -79,10 +79,10 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetByShowtimeAsync_ExcludesCancelledBookings()
     {
-        await _repo.AddAsync(MakeBooking("1,2", "Pending"), CancellationToken.None);
-        await _repo.AddAsync(MakeBooking("3,4", "Cancelled"), CancellationToken.None);
+        await _repo.AddAsync(MakeBooking("1,2", "Pending"));
+        await _repo.AddAsync(MakeBooking("3,4", "Cancelled"));
 
-        var result = await _repo.GetByShowtimeAsync(_showtime.Id, CancellationToken.None);
+        var result = await _repo.GetByShowtimeAsync(_showtime.Id);
 
         result.Should().HaveCount(1);
         result[0].SeatNumbers.Should().Be("1,2");

@@ -4,7 +4,7 @@ namespace AdminBFF.Core.Services;
 
 public interface IAdminService
 {
-    Task<List<UserDto>> GetAllUsersAsync(string bearerToken, CancellationToken ct = default);
-    Task<List<MovieDto>> GetAllMoviesAsync(CancellationToken ct = default);
-    Task<List<TrainDto>> GetAllTrainsAsync(CancellationToken ct = default);
+    Task<List<UserDto>> GetAllUsersAsync(string bearerToken);
+    Task<List<MovieDto>> GetAllMoviesAsync();
+    Task<List<TrainDto>> GetAllTrainsAsync();
 }

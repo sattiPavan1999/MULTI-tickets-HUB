@@ -14,17 +14,17 @@ public class UserAccountService(
     IMapper mapper,
     ILogger<UserAccountService> logger) : IUserAccountService
 {
-    public async Task<UserType?> GetUserByIdAsync(int id, CancellationToken ct = default)
+    public async Task<UserType?> GetUserByIdAsync(int id)
     {
-        var user = await userRepository.GetByIdAsync(id, ct);
+        var user = await userRepository.GetByIdAsync(id);
         return user is null ? null : mapper.Map<UserType>(user);
     }
 
-    public async Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input, CancellationToken ct = default)
+    public async Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input)
     {
-        await updateProfileValidator.ValidateAndThrowAsync(input, ct);
+        await updateProfileValidator.ValidateAndThrowAsync(input);
 
-        var user = await userRepository.GetByIdAsync(userId, ct)
+        var user = await userRepository.GetByIdAsync(userId)
             ?? throw new NotFoundException("User not found");
 
         if (!string.IsNullOrWhiteSpace(input.FullName))
@@ -36,7 +36,7 @@ public class UserAccountService(
         if (!string.IsNullOrWhiteSpace(input.Email)
             && !string.Equals(input.Email, user.Email, StringComparison.OrdinalIgnoreCase))
         {
-            if (await userRepository.EmailExistsAsync(input.Email, ct))
+            if (await userRepository.EmailExistsAsync(input.Email))
             {
                 logger.LogWarning("Profile update rejected — email already registered: {Email}", input.Email);
                 throw new ConflictException("Email already registered");
@@ -45,27 +45,27 @@ public class UserAccountService(
             user.Email = input.Email;
         }
 
-        var updated = await userRepository.UpdateAsync(user, ct);
+        var updated = await userRepository.UpdateAsync(user);
         await auditService.LogAsync($"User profile updated: {updated.Email}");
         return mapper.Map<UserType>(updated);
     }
 
-    public async Task<List<UserType>> GetAllUsersAsync(CancellationToken ct = default)
+    public async Task<List<UserType>> GetAllUsersAsync()
     {
-        var users = await userRepository.GetAllAsync(ct);
+        var users = await userRepository.GetAllAsync();
         return mapper.Map<List<UserType>>(users);
     }
 
-    public Task<int> GetUserCountAsync(CancellationToken ct = default)
-        => userRepository.CountAsync(ct);
+    public Task<int> GetUserCountAsync()
+        => userRepository.CountAsync();
 
-    public async Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default)
+    public async Task<OperationResult> ToggleUserStatusAsync(int userId)
     {
-        var user = await userRepository.GetByIdAsync(userId, ct)
+        var user = await userRepository.GetByIdAsync(userId)
             ?? throw new NotFoundException("User not found");
 
         user.IsActive = !user.IsActive;
-        await userRepository.UpdateAsync(user, ct);
+        await userRepository.UpdateAsync(user);
         await auditService.LogAsync($"User status toggled: {user.Email} → IsActive={user.IsActive}");
 
         var status = user.IsActive ? "activated" : "deactivated";

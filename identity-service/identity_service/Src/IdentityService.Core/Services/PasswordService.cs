@@ -16,9 +16,9 @@ public class PasswordService(
     IConfiguration configuration,
     ILogger<PasswordService> logger) : IPasswordService
 {
-    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input, CancellationToken ct = default)
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input)
     {
-        var user = await userRepository.GetByEmailAsync(input.Email, ct);
+        var user = await userRepository.GetByEmailAsync(input.Email);
 
         if (user is null)
         {
@@ -53,7 +53,7 @@ public class PasswordService(
         };
     }
 
-    public async Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input, CancellationToken ct = default)
+    public async Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input)
     {
         var resetToken = await resetTokenRepository.GetActiveByHashAsync(HashToken(input.Token));
 
@@ -64,11 +64,11 @@ public class PasswordService(
             throw new UnauthorizedAccessException("Reset token is invalid or has expired");
         }
 
-        var user = await userRepository.GetByIdAsync(resetToken.UserId, ct)
+        var user = await userRepository.GetByIdAsync(resetToken.UserId)
             ?? throw new NotFoundException("User not found");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(input.NewPassword);
-        await userRepository.UpdateAsync(user, ct);
+        await userRepository.UpdateAsync(user);
         await resetTokenRepository.MarkUsedAsync(resetToken);
         await auditService.LogAsync($"Password reset for user: {user.Email}");
 

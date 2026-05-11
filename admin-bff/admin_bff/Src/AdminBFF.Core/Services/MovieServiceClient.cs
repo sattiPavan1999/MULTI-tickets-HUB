@@ -7,65 +7,65 @@ namespace AdminBFF.Core.Services;
 
 public class MovieServiceClient(HttpClient httpClient, ILogger<MovieServiceClient> logger) : IMovieService
 {
-    private static async Task ThrowIfErrorAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task ThrowIfErrorAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode) return;
         ErrorResponse? body = null;
-        try { body = await response.Content.ReadFromJsonAsync<ErrorResponse>(ct); } catch { }
+        try { body = await response.Content.ReadFromJsonAsync<ErrorResponse>(); } catch { }
         var message = body?.Message ?? response.ReasonPhrase ?? "Upstream request failed";
         throw new ProxyException((int)response.StatusCode, message);
     }
 
-    public async Task<List<MovieDto>> GetAllMoviesAsync(CancellationToken ct = default)
+    public async Task<List<MovieDto>> GetAllMoviesAsync()
     {
-        var movies = await httpClient.GetFromJsonAsync<List<MovieDto>>("api/movies", ct);
+        var movies = await httpClient.GetFromJsonAsync<List<MovieDto>>("api/movies");
         return movies ?? [];
     }
 
-    public async Task<MovieDto> CreateMovieAsync(CreateMovieRequest request, CancellationToken ct = default)
+    public async Task<MovieDto> CreateMovieAsync(CreateMovieRequest request)
     {
-        var response = await httpClient.PostAsJsonAsync("api/movies", request, ct);
-        await ThrowIfErrorAsync(response, ct);
-        return (await response.Content.ReadFromJsonAsync<MovieDto>(ct))!;
+        var response = await httpClient.PostAsJsonAsync("api/movies", request);
+        await ThrowIfErrorAsync(response);
+        return (await response.Content.ReadFromJsonAsync<MovieDto>())!;
     }
 
-    public async Task<MovieDto> UpdateMovieAsync(int id, UpdateMovieRequest request, CancellationToken ct = default)
+    public async Task<MovieDto> UpdateMovieAsync(int id, UpdateMovieRequest request)
     {
-        var response = await httpClient.PutAsJsonAsync($"api/movies/{id}", request, ct);
-        await ThrowIfErrorAsync(response, ct);
-        return (await response.Content.ReadFromJsonAsync<MovieDto>(ct))!;
+        var response = await httpClient.PutAsJsonAsync($"api/movies/{id}", request);
+        await ThrowIfErrorAsync(response);
+        return (await response.Content.ReadFromJsonAsync<MovieDto>())!;
     }
 
-    public async Task DeleteMovieAsync(int id, CancellationToken ct = default)
+    public async Task DeleteMovieAsync(int id)
     {
-        var response = await httpClient.DeleteAsync($"api/movies/{id}", ct);
-        await ThrowIfErrorAsync(response, ct);
+        var response = await httpClient.DeleteAsync($"api/movies/{id}");
+        await ThrowIfErrorAsync(response);
     }
 
-    public async Task<OperationResult> ToggleMovieStatusAsync(int id, CancellationToken ct = default)
+    public async Task<OperationResult> ToggleMovieStatusAsync(int id)
     {
-        var response = await httpClient.PutAsync($"api/movies/{id}/toggle-status", null, ct);
-        await ThrowIfErrorAsync(response, ct);
-        return (await response.Content.ReadFromJsonAsync<OperationResult>(ct))
+        var response = await httpClient.PutAsync($"api/movies/{id}/toggle-status", null);
+        await ThrowIfErrorAsync(response);
+        return (await response.Content.ReadFromJsonAsync<OperationResult>())
                ?? new OperationResult { Success = true };
     }
 
-    public async Task<List<ShowtimeDto>> GetShowtimesAsync(int movieId, CancellationToken ct = default)
+    public async Task<List<ShowtimeDto>> GetShowtimesAsync(int movieId)
     {
-        var showtimes = await httpClient.GetFromJsonAsync<List<ShowtimeDto>>($"api/movies/{movieId}/showtimes", ct);
+        var showtimes = await httpClient.GetFromJsonAsync<List<ShowtimeDto>>($"api/movies/{movieId}/showtimes");
         return showtimes ?? [];
     }
 
-    public async Task<ShowtimeDto> CreateShowtimeAsync(CreateShowtimeRequest request, CancellationToken ct = default)
+    public async Task<ShowtimeDto> CreateShowtimeAsync(CreateShowtimeRequest request)
     {
-        var response = await httpClient.PostAsJsonAsync($"api/movies/{request.MovieId}/showtimes", request, ct);
-        await ThrowIfErrorAsync(response, ct);
-        return (await response.Content.ReadFromJsonAsync<ShowtimeDto>(ct))!;
+        var response = await httpClient.PostAsJsonAsync($"api/movies/{request.MovieId}/showtimes", request);
+        await ThrowIfErrorAsync(response);
+        return (await response.Content.ReadFromJsonAsync<ShowtimeDto>())!;
     }
 
-    public async Task DeleteShowtimeAsync(int id, CancellationToken ct = default)
+    public async Task DeleteShowtimeAsync(int id)
     {
-        var response = await httpClient.DeleteAsync($"api/movies/showtimes/{id}", ct);
-        await ThrowIfErrorAsync(response, ct);
+        var response = await httpClient.DeleteAsync($"api/movies/showtimes/{id}");
+        await ThrowIfErrorAsync(response);
     }
 }

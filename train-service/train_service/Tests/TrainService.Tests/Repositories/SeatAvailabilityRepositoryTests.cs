@@ -36,7 +36,7 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
             DepartureTime = DateTime.UtcNow.AddDays(1),
             ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6),
             Price = 600m
-        }, CancellationToken.None);
+        });
     }
 
     public Task DisposeAsync() => _db.DisposeAsync().AsTask();
@@ -47,7 +47,7 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
         var availability = new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 100 };
 
-        var result = await _seatRepo.UpsertAsync(availability, CancellationToken.None);
+        var result = await _seatRepo.UpsertAsync(availability);
 
         result.Id.Should().BeGreaterThan(0);
         result.AvailableSeats.Should().Be(100);
@@ -57,12 +57,12 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
     public async Task UpsertAsync_Update_ModifiesExistingEntry()
     {
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(6));
-        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 100 }, CancellationToken.None);
+        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 100 });
 
-        var updated = await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 50 }, CancellationToken.None);
+        var updated = await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 50 });
 
         updated.AvailableSeats.Should().Be(50);
-        var all = await _seatRepo.GetByTrainAsync(_train.Id, CancellationToken.None);
+        var all = await _seatRepo.GetByTrainAsync(_train.Id);
         all.Should().HaveCount(1);
     }
 
@@ -71,10 +71,10 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
     {
         var date1 = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7));
         var date2 = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(8));
-        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date1, AvailableSeats = 100 }, CancellationToken.None);
-        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date2, AvailableSeats = 80 }, CancellationToken.None);
+        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date1, AvailableSeats = 100 });
+        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date2, AvailableSeats = 80 });
 
-        var all = await _seatRepo.GetByTrainAsync(_train.Id, CancellationToken.None);
+        var all = await _seatRepo.GetByTrainAsync(_train.Id);
 
         all.Should().HaveCount(2);
         all.Should().AllSatisfy(s => s.TrainId.Should().Be(_train.Id));
@@ -84,9 +84,9 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
     public async Task GetByTrainAndDateAsync_ExistingEntry_ReturnsIt()
     {
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(9));
-        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 200 }, CancellationToken.None);
+        await _seatRepo.UpsertAsync(new SeatAvailability { TrainId = _train.Id, Date = date, AvailableSeats = 200 });
 
-        var found = await _seatRepo.GetByTrainAndDateAsync(_train.Id, date, CancellationToken.None);
+        var found = await _seatRepo.GetByTrainAndDateAsync(_train.Id, date);
 
         found.Should().NotBeNull();
         found!.AvailableSeats.Should().Be(200);
@@ -97,7 +97,7 @@ public class SeatAvailabilityRepositoryTests(PostgresFixture fixture) : IAsyncLi
     {
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(100));
 
-        var found = await _seatRepo.GetByTrainAndDateAsync(_train.Id, date, CancellationToken.None);
+        var found = await _seatRepo.GetByTrainAndDateAsync(_train.Id, date);
 
         found.Should().BeNull();
     }

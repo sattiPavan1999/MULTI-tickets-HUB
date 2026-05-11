@@ -177,7 +177,7 @@ public class ShowtimeServiceTests
     public async Task GetSeatStatus_WithBookings_ReturnsCorrectBookedSeats()
     {
         var bookingRepo = new Mock<IBookingRepository>();
-        bookingRepo.Setup(r => r.GetByShowtimeAsync(1, It.IsAny<CancellationToken>()))
+        bookingRepo.Setup(r => r.GetByShowtimeAsync(1))
             .ReturnsAsync([
                 new MovieBooking { SeatNumbers = "1,3,5", Status = "Pending" },
                 new MovieBooking { SeatNumbers = "7", Status = "Confirmed" }

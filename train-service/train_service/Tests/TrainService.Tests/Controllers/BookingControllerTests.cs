@@ -38,12 +38,12 @@ public class BookingControllerTests
     public async Task Create_ValidInput_Returns201()
     {
         var svc = new Mock<ITrainBookingService>();
-        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateTrainBookingInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateTrainBookingInput>()))
            .ReturnsAsync(MakeResponse());
         var controller = BuildController(svc.Object, userId: 1);
         var input = new CreateTrainBookingInput { TrainId = 1, TravelDate = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"), PassengerName = "Alice", PassengerAge = 28, NumberOfSeats = 2 };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         var created = Assert.IsType<ObjectResult>(result.Result);
         created.StatusCode.Should().Be(201);
@@ -57,7 +57,7 @@ public class BookingControllerTests
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         var input = new CreateTrainBookingInput { TrainId = 1, TravelDate = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"), PassengerName = "Alice", PassengerAge = 28, NumberOfSeats = 2 };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         Assert.IsType<UnauthorizedResult>(result.Result);
     }
@@ -66,28 +66,28 @@ public class BookingControllerTests
     public async Task Create_CallsBookingServiceWithHeaderUserId()
     {
         var svc = new Mock<ITrainBookingService>();
-        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateTrainBookingInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateTrainBookingInput>()))
            .ReturnsAsync(MakeResponse());
         var controller = BuildController(svc.Object, userId: 1);
         var input = new CreateTrainBookingInput { TrainId = 1, TravelDate = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"), PassengerName = "Alice", PassengerAge = 28, NumberOfSeats = 2 };
 
-        await controller.Create(input, CancellationToken.None);
+        await controller.Create(input);
 
-        svc.Verify(s => s.CreateBookingAsync(It.Is<CreateTrainBookingInput>(i => i.UserId == 1), CancellationToken.None), Times.Once);
+        svc.Verify(s => s.CreateBookingAsync(It.Is<CreateTrainBookingInput>(i => i.UserId == 1)), Times.Once);
     }
 
     [Fact]
     public async Task Cancel_CallsCancelBookingService()
     {
         var svc = new Mock<ITrainBookingService>();
-        svc.Setup(s => s.CancelBookingAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CancelBookingAsync(It.IsAny<int>()))
            .ReturnsAsync(new OperationResult { Success = true, Message = "Booking cancelled successfully" });
         var controller = BuildController(svc.Object);
 
-        var result = await controller.Cancel(1, CancellationToken.None);
+        var result = await controller.Cancel(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         ok.StatusCode.Should().Be(200);
-        svc.Verify(s => s.CancelBookingAsync(1, CancellationToken.None), Times.Once);
+        svc.Verify(s => s.CancelBookingAsync(1), Times.Once);
     }
 }

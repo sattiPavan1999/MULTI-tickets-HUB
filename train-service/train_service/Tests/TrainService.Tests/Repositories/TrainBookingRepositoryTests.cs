@@ -37,7 +37,7 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
             DepartureTime = DateTime.UtcNow.AddDays(1),
             ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(8),
             Price = 500m
-        }, CancellationToken.None);
+        });
     }
 
     public Task DisposeAsync() => _db.DisposeAsync().AsTask();
@@ -59,7 +59,7 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task AddAsync_Persists()
     {
-        var booking = await _bookingRepo.AddAsync(MakeBooking(), CancellationToken.None);
+        var booking = await _bookingRepo.AddAsync(MakeBooking());
 
         booking.Id.Should().BeGreaterThan(0);
         booking.PNR.Should().StartWith("PNR");
@@ -68,9 +68,9 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task GetByPNRAsync_Finds()
     {
-        var booking = await _bookingRepo.AddAsync(MakeBooking(), CancellationToken.None);
+        var booking = await _bookingRepo.AddAsync(MakeBooking());
 
-        var found = await _bookingRepo.GetByPNRAsync(booking.PNR, CancellationToken.None);
+        var found = await _bookingRepo.GetByPNRAsync(booking.PNR);
 
         found.Should().NotBeNull();
         found!.Id.Should().Be(booking.Id);
@@ -79,12 +79,12 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task GetWaitlistedByTrainAndDateAsync_ReturnsOrdered()
     {
-        await _bookingRepo.AddAsync(MakeBooking("Waitlisted", 2), CancellationToken.None);
-        await _bookingRepo.AddAsync(MakeBooking("Waitlisted", 1), CancellationToken.None);
-        await _bookingRepo.AddAsync(MakeBooking("Confirmed", null), CancellationToken.None);
+        await _bookingRepo.AddAsync(MakeBooking("Waitlisted", 2));
+        await _bookingRepo.AddAsync(MakeBooking("Waitlisted", 1));
+        await _bookingRepo.AddAsync(MakeBooking("Confirmed", null));
 
         var result = await _bookingRepo.GetWaitlistedByTrainAndDateAsync(
-            _train.Id, DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None);
+            _train.Id, DateOnly.FromDateTime(DateTime.UtcNow));
 
         result.Should().HaveCount(2);
         result[0].WaitlistPosition.Should().Be(1);

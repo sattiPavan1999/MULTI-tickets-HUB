@@ -37,11 +37,11 @@ public class TrainControllerTests
     public async Task GetAll_ReturnsOkWithTrains()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.SearchTrainsAsync(null, null, null, false, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.SearchTrainsAsync(null, null, null, false))
            .ReturnsAsync([MakeTrainResponse(), MakeTrainResponse()]);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetAll(null, null, null, false, CancellationToken.None);
+        var result = await controller.GetAll(null, null, null, false);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<TrainResponse>>(ok.Value);
@@ -52,24 +52,24 @@ public class TrainControllerTests
     public async Task GetAll_WithSearchParams_PassesThemToService()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false))
            .ReturnsAsync([MakeTrainResponse()]);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetAll("New Delhi", "Howrah", "price", false, CancellationToken.None);
+        var result = await controller.GetAll("New Delhi", "Howrah", "price", false);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        svc.Verify(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false, It.IsAny<CancellationToken>()), Times.Once);
+        svc.Verify(s => s.SearchTrainsAsync("New Delhi", "Howrah", "price", false), Times.Once);
     }
 
     [Fact]
     public async Task GetById_ExistingTrain_ReturnsOk()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.GetTrainByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(MakeTrainResponse(1));
+        svc.Setup(s => s.GetTrainByIdAsync(1)).ReturnsAsync(MakeTrainResponse(1));
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetById(1, CancellationToken.None);
+        var result = await controller.GetById(1);
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -78,10 +78,10 @@ public class TrainControllerTests
     public async Task GetById_NotFound_Returns404()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.GetTrainByIdAsync(99, It.IsAny<CancellationToken>())).ReturnsAsync((TrainResponse?)null);
+        svc.Setup(s => s.GetTrainByIdAsync(99)).ReturnsAsync((TrainResponse?)null);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetById(99, CancellationToken.None);
+        var result = await controller.GetById(99);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -90,12 +90,12 @@ public class TrainControllerTests
     public async Task Create_ValidInput_Returns201()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.CreateTrainAsync(It.IsAny<CreateTrainInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateTrainAsync(It.IsAny<CreateTrainInput>()))
            .ReturnsAsync(MakeTrainResponse(1));
         var controller = new TrainController(svc.Object);
         var input = new CreateTrainInput { TrainName = "T", TrainNumber = "12345", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(5), Price = 500m };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         created.StatusCode.Should().Be(201);
@@ -105,11 +105,11 @@ public class TrainControllerTests
     public async Task Update_ValidInput_Returns200()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.UpdateTrainAsync(1, It.IsAny<UpdateTrainInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.UpdateTrainAsync(1, It.IsAny<UpdateTrainInput>()))
            .ReturnsAsync(MakeTrainResponse(1));
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.Update(1, new UpdateTrainInput { TrainName = "Updated" }, CancellationToken.None);
+        var result = await controller.Update(1, new UpdateTrainInput { TrainName = "Updated" });
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -118,10 +118,10 @@ public class TrainControllerTests
     public async Task Delete_ExistingTrain_Returns204()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.DeleteTrainAsync(1, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        svc.Setup(s => s.DeleteTrainAsync(1)).Returns(Task.CompletedTask);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.Delete(1, CancellationToken.None);
+        var result = await controller.Delete(1);
 
         Assert.IsType<NoContentResult>(result);
     }
@@ -130,11 +130,11 @@ public class TrainControllerTests
     public async Task GetSeatAvailability_ReturnsOk()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.GetSeatAvailabilityAsync(1, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.GetSeatAvailabilityAsync(1))
            .ReturnsAsync([MakeSeatResponse()]);
         var controller = new TrainController(svc.Object);
 
-        var result = await controller.GetSeatAvailability(1, CancellationToken.None);
+        var result = await controller.GetSeatAvailability(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.IsType<List<SeatAvailabilityResponse>>(ok.Value);
@@ -144,12 +144,12 @@ public class TrainControllerTests
     public async Task UpdateSeatAvailability_ReturnsOk()
     {
         var svc = new Mock<ITrainService>();
-        svc.Setup(s => s.UpdateSeatAvailabilityAsync(1, It.IsAny<SeatAvailabilityInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.UpdateSeatAvailabilityAsync(1, It.IsAny<SeatAvailabilityInput>()))
            .ReturnsAsync(MakeSeatResponse());
         var controller = new TrainController(svc.Object);
         var input = new SeatAvailabilityInput { Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = 100 };
 
-        var result = await controller.UpdateSeatAvailability(1, input, CancellationToken.None);
+        var result = await controller.UpdateSeatAvailability(1, input);
 
         Assert.IsType<OkObjectResult>(result.Result);
     }

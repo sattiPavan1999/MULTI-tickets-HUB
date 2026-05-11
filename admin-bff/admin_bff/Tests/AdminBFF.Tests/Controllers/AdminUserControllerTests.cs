@@ -25,11 +25,11 @@ public class AdminUserControllerTests
     public async Task ToggleUserStatus_Returns200WithOperationResult()
     {
         var svc = new Mock<IIdentityService>();
-        svc.Setup(s => s.ToggleUserStatusAsync(3, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.ToggleUserStatusAsync(3, It.IsAny<string>()))
            .ReturnsAsync(new OperationResult { Success = true, Message = "User account deactivated" });
         var controller = BuildController(svc);
 
-        var result = await controller.ToggleUserStatus(3, CancellationToken.None);
+        var result = await controller.ToggleUserStatus(3);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<OperationResult>(ok.Value);
@@ -40,12 +40,12 @@ public class AdminUserControllerTests
     public async Task ToggleUserStatus_ForwardsToken_ToIdentityService()
     {
         var svc = new Mock<IIdentityService>();
-        svc.Setup(s => s.ToggleUserStatusAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.ToggleUserStatusAsync(It.IsAny<int>(), It.IsAny<string>()))
            .ReturnsAsync(new OperationResult { Success = true });
         var controller = BuildController(svc, "my-jwt-token");
 
-        await controller.ToggleUserStatus(5, CancellationToken.None);
+        await controller.ToggleUserStatus(5);
 
-        svc.Verify(s => s.ToggleUserStatusAsync(5, "my-jwt-token", CancellationToken.None), Times.Once);
+        svc.Verify(s => s.ToggleUserStatusAsync(5, "my-jwt-token"), Times.Once);
     }
 }

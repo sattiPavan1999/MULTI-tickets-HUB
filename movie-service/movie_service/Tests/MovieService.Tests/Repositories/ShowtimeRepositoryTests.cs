@@ -46,7 +46,7 @@ public class ShowtimeRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task AddAsync_PersistsShowtime()
     {
-        var showtime = await _repo.AddAsync(MakeShowtime(), CancellationToken.None);
+        var showtime = await _repo.AddAsync(MakeShowtime());
 
         showtime.Id.Should().BeGreaterThan(0);
         showtime.TotalSeats.Should().Be(50);
@@ -56,10 +56,10 @@ public class ShowtimeRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetByMovieIdAsync_ReturnsMatchingShowtimes()
     {
-        await _repo.AddAsync(MakeShowtime(new DateOnly(2026, 12, 25)), CancellationToken.None);
-        await _repo.AddAsync(MakeShowtime(new DateOnly(2026, 12, 26)), CancellationToken.None);
+        await _repo.AddAsync(MakeShowtime(new DateOnly(2026, 12, 25)));
+        await _repo.AddAsync(MakeShowtime(new DateOnly(2026, 12, 26)));
 
-        var result = await _repo.GetByMovieIdAsync(_movie.Id, CancellationToken.None);
+        var result = await _repo.GetByMovieIdAsync(_movie.Id);
 
         result.Should().HaveCount(2);
         result.Should().BeInAscendingOrder(s => s.ShowDate);
@@ -69,10 +69,10 @@ public class ShowtimeRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     public async Task GetByCompositeKeyAsync_ExistingSlot_Returns()
     {
         var showtime = MakeShowtime();
-        await _repo.AddAsync(showtime, CancellationToken.None);
+        await _repo.AddAsync(showtime);
 
         var result = await _repo.GetByCompositeKeyAsync(
-            _movie.Id, showtime.ShowDate, showtime.ShowTime, showtime.ScreenNumber, CancellationToken.None);
+            _movie.Id, showtime.ShowDate, showtime.ShowTime, showtime.ScreenNumber);
 
         result.Should().NotBeNull();
         result!.Id.Should().Be(showtime.Id);
@@ -82,7 +82,7 @@ public class ShowtimeRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     public async Task GetByCompositeKeyAsync_NonExistingSlot_ReturnsNull()
     {
         var result = await _repo.GetByCompositeKeyAsync(
-            _movie.Id, new DateOnly(2027, 1, 1), new TimeOnly(10, 0), "Screen 99", CancellationToken.None);
+            _movie.Id, new DateOnly(2027, 1, 1), new TimeOnly(10, 0), "Screen 99");
 
         result.Should().BeNull();
     }

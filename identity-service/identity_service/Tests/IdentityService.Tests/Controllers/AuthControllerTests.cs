@@ -58,11 +58,11 @@ public class AuthControllerTests
     {
         var user = MakeUser();
         var authSvc = new Mock<IAuthService>();
-        authSvc.Setup(s => s.RegisterAsync(It.IsAny<RegisterInput>(), It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        authSvc.Setup(s => s.RegisterAsync(It.IsAny<RegisterInput>())).ReturnsAsync(user);
         var controller = BuildController(authSvc: authSvc);
         var input = new RegisterInput { Email = user.Email, Password = "Password1!", FullName = user.FullName, PhoneNumber = "+1234567890" };
 
-        var result = await controller.Register(input, CancellationToken.None);
+        var result = await controller.Register(input);
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         Assert.Equal(201, created.StatusCode);
@@ -73,13 +73,13 @@ public class AuthControllerTests
     public async Task Register_CallsAuthService_WithInput()
     {
         var authSvc = new Mock<IAuthService>();
-        authSvc.Setup(s => s.RegisterAsync(It.IsAny<RegisterInput>(), It.IsAny<CancellationToken>())).ReturnsAsync(MakeUser());
+        authSvc.Setup(s => s.RegisterAsync(It.IsAny<RegisterInput>())).ReturnsAsync(MakeUser());
         var controller = BuildController(authSvc: authSvc);
         var input = new RegisterInput { Email = "user@example.com", Password = "Password1!", FullName = "John Doe", PhoneNumber = "+1234567890" };
 
-        await controller.Register(input, CancellationToken.None);
+        await controller.Register(input);
 
-        authSvc.Verify(s => s.RegisterAsync(input, It.IsAny<CancellationToken>()), Times.Once);
+        authSvc.Verify(s => s.RegisterAsync(input), Times.Once);
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -88,11 +88,11 @@ public class AuthControllerTests
     public async Task Login_ValidCredentials_Returns200WithTokenAndUser()
     {
         var authSvc = new Mock<IAuthService>();
-        authSvc.Setup(s => s.LoginAsync(It.IsAny<LoginInput>(), It.IsAny<CancellationToken>()))
+        authSvc.Setup(s => s.LoginAsync(It.IsAny<LoginInput>()))
                .ReturnsAsync(new LoginResponse { Token = "jwt-token", User = MakeUser() });
         var controller = BuildController(authSvc: authSvc);
 
-        var result = await controller.Login(new LoginInput { Email = "user@example.com", Password = "Password1!" }, CancellationToken.None);
+        var result = await controller.Login(new LoginInput { Email = "user@example.com", Password = "Password1!" });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<LoginResponse>(ok.Value);
@@ -103,14 +103,14 @@ public class AuthControllerTests
     public async Task Login_CallsAuthService_WithInput()
     {
         var authSvc = new Mock<IAuthService>();
-        authSvc.Setup(s => s.LoginAsync(It.IsAny<LoginInput>(), It.IsAny<CancellationToken>()))
+        authSvc.Setup(s => s.LoginAsync(It.IsAny<LoginInput>()))
                .ReturnsAsync(new LoginResponse { Token = "t", User = MakeUser() });
         var controller = BuildController(authSvc: authSvc);
         var input = new LoginInput { Email = "user@example.com", Password = "Password1!" };
 
-        await controller.Login(input, CancellationToken.None);
+        await controller.Login(input);
 
-        authSvc.Verify(s => s.LoginAsync(input, It.IsAny<CancellationToken>()), Times.Once);
+        authSvc.Verify(s => s.LoginAsync(input), Times.Once);
     }
 
     // ── UpdateProfile ─────────────────────────────────────────────────────────
@@ -120,10 +120,10 @@ public class AuthControllerTests
     {
         var updated = MakeUser(); updated.FullName = "Jane Doe";
         var userSvc = new Mock<IUserAccountService>();
-        userSvc.Setup(s => s.UpdateProfileAsync(1, It.IsAny<UpdateProfileInput>(), It.IsAny<CancellationToken>())).ReturnsAsync(updated);
+        userSvc.Setup(s => s.UpdateProfileAsync(1, It.IsAny<UpdateProfileInput>())).ReturnsAsync(updated);
         var controller = BuildController(userSvc: userSvc, authenticatedUserId: 1);
 
-        var result = await controller.UpdateProfile(new UpdateProfileInput { FullName = "Jane Doe" }, CancellationToken.None);
+        var result = await controller.UpdateProfile(new UpdateProfileInput { FullName = "Jane Doe" });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var user = Assert.IsType<UserType>(ok.Value);
@@ -135,7 +135,7 @@ public class AuthControllerTests
     {
         var controller = BuildController(authenticatedUserId: null);
 
-        var result = await controller.UpdateProfile(new UpdateProfileInput { FullName = "X" }, CancellationToken.None);
+        var result = await controller.UpdateProfile(new UpdateProfileInput { FullName = "X" });
 
         Assert.IsType<UnauthorizedResult>(result.Result);
     }
@@ -144,7 +144,7 @@ public class AuthControllerTests
     public async Task UpdateProfile_CallsUserService_WithParsedUserId()
     {
         var userSvc = new Mock<IUserAccountService>();
-        userSvc.Setup(s => s.UpdateProfileAsync(3, It.IsAny<UpdateProfileInput>(), It.IsAny<CancellationToken>())).ReturnsAsync(MakeUser(3));
+        userSvc.Setup(s => s.UpdateProfileAsync(3, It.IsAny<UpdateProfileInput>())).ReturnsAsync(MakeUser(3));
         var controller = new AuthController(
             new Mock<IAuthService>().Object,
             userSvc.Object,
@@ -160,9 +160,9 @@ public class AuthControllerTests
             }
         };
 
-        await controller.UpdateProfile(new UpdateProfileInput { FullName = "New" }, CancellationToken.None);
+        await controller.UpdateProfile(new UpdateProfileInput { FullName = "New" });
 
-        userSvc.Verify(s => s.UpdateProfileAsync(3, It.IsAny<UpdateProfileInput>(), It.IsAny<CancellationToken>()), Times.Once);
+        userSvc.Verify(s => s.UpdateProfileAsync(3, It.IsAny<UpdateProfileInput>()), Times.Once);
     }
 
     // ── ForgotPassword ────────────────────────────────────────────────────────
@@ -171,11 +171,11 @@ public class AuthControllerTests
     public async Task ForgotPassword_ValidEmail_Returns200WithMessage()
     {
         var passSvc = new Mock<IPasswordService>();
-        passSvc.Setup(s => s.ForgotPasswordAsync(It.IsAny<ForgotPasswordInput>(), It.IsAny<CancellationToken>()))
+        passSvc.Setup(s => s.ForgotPasswordAsync(It.IsAny<ForgotPasswordInput>()))
                .ReturnsAsync(new ForgotPasswordResponse { Message = "If the email is registered, a reset token has been issued.", ResetToken = "token123" });
         var controller = BuildController(passSvc: passSvc);
 
-        var result = await controller.ForgotPassword(new ForgotPasswordInput { Email = "user@example.com" }, CancellationToken.None);
+        var result = await controller.ForgotPassword(new ForgotPasswordInput { Email = "user@example.com" });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<ForgotPasswordResponse>(ok.Value);
@@ -186,11 +186,11 @@ public class AuthControllerTests
     public async Task ForgotPassword_UnknownEmail_StillReturns200()
     {
         var passSvc = new Mock<IPasswordService>();
-        passSvc.Setup(s => s.ForgotPasswordAsync(It.IsAny<ForgotPasswordInput>(), It.IsAny<CancellationToken>()))
+        passSvc.Setup(s => s.ForgotPasswordAsync(It.IsAny<ForgotPasswordInput>()))
                .ReturnsAsync(new ForgotPasswordResponse { Message = "If the email is registered, a reset token has been issued." });
         var controller = BuildController(passSvc: passSvc);
 
-        var result = await controller.ForgotPassword(new ForgotPasswordInput { Email = "nobody@example.com" }, CancellationToken.None);
+        var result = await controller.ForgotPassword(new ForgotPasswordInput { Email = "nobody@example.com" });
 
         Assert.IsType<OkObjectResult>(result.Result);
     }
@@ -201,11 +201,11 @@ public class AuthControllerTests
     public async Task ResetPassword_ValidToken_Returns200WithSuccess()
     {
         var passSvc = new Mock<IPasswordService>();
-        passSvc.Setup(s => s.ResetPasswordAsync(It.IsAny<ResetPasswordInput>(), It.IsAny<CancellationToken>()))
+        passSvc.Setup(s => s.ResetPasswordAsync(It.IsAny<ResetPasswordInput>()))
                .ReturnsAsync(new OperationResult { Success = true, Message = "Password has been reset" });
         var controller = BuildController(passSvc: passSvc);
 
-        var result = await controller.ResetPassword(new ResetPasswordInput { Token = "valid-token", NewPassword = "NewPass1!" }, CancellationToken.None);
+        var result = await controller.ResetPassword(new ResetPasswordInput { Token = "valid-token", NewPassword = "NewPass1!" });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<OperationResult>(ok.Value);
@@ -216,14 +216,14 @@ public class AuthControllerTests
     public async Task ResetPassword_CallsPasswordService_WithInput()
     {
         var passSvc = new Mock<IPasswordService>();
-        passSvc.Setup(s => s.ResetPasswordAsync(It.IsAny<ResetPasswordInput>(), It.IsAny<CancellationToken>()))
+        passSvc.Setup(s => s.ResetPasswordAsync(It.IsAny<ResetPasswordInput>()))
                .ReturnsAsync(new OperationResult { Success = true });
         var controller = BuildController(passSvc: passSvc);
         var input = new ResetPasswordInput { Token = "tok", NewPassword = "NewPass1!" };
 
-        await controller.ResetPassword(input, CancellationToken.None);
+        await controller.ResetPassword(input);
 
-        passSvc.Verify(s => s.ResetPasswordAsync(input, It.IsAny<CancellationToken>()), Times.Once);
+        passSvc.Verify(s => s.ResetPasswordAsync(input), Times.Once);
     }
 
     // ── ToggleUserStatus ──────────────────────────────────────────────────────
@@ -232,11 +232,11 @@ public class AuthControllerTests
     public async Task ToggleUserStatus_ValidId_Returns200WithOperationResult()
     {
         var userSvc = new Mock<IUserAccountService>();
-        userSvc.Setup(s => s.ToggleUserStatusAsync(5, It.IsAny<CancellationToken>()))
+        userSvc.Setup(s => s.ToggleUserStatusAsync(5))
                .ReturnsAsync(new OperationResult { Success = true, Message = "User account deactivated" });
         var controller = BuildController(userSvc: userSvc);
 
-        var result = await controller.ToggleUserStatus(5, CancellationToken.None);
+        var result = await controller.ToggleUserStatus(5);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<OperationResult>(ok.Value);
@@ -247,12 +247,12 @@ public class AuthControllerTests
     public async Task ToggleUserStatus_CallsUserService_WithId()
     {
         var userSvc = new Mock<IUserAccountService>();
-        userSvc.Setup(s => s.ToggleUserStatusAsync(7, It.IsAny<CancellationToken>()))
+        userSvc.Setup(s => s.ToggleUserStatusAsync(7))
                .ReturnsAsync(new OperationResult { Success = true });
         var controller = BuildController(userSvc: userSvc);
 
-        await controller.ToggleUserStatus(7, CancellationToken.None);
+        await controller.ToggleUserStatus(7);
 
-        userSvc.Verify(s => s.ToggleUserStatusAsync(7, CancellationToken.None), Times.Once);
+        userSvc.Verify(s => s.ToggleUserStatusAsync(7), Times.Once);
     }
 }

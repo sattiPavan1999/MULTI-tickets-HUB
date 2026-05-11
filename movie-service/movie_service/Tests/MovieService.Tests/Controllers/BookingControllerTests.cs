@@ -34,12 +34,12 @@ public class BookingControllerTests
     public async Task Create_ValidInput_Returns201()
     {
         var svc = new Mock<IBookingService>();
-        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateBookingInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateBookingInput>()))
            .ReturnsAsync(MakeResponse());
         var controller = BuildController(svc.Object, userId: 42);
         var input = new CreateBookingInput { ShowtimeId = 1, SeatNumbers = [1, 2, 3] };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         var created = Assert.IsType<ObjectResult>(result.Result);
         created.StatusCode.Should().Be(201);
@@ -53,7 +53,7 @@ public class BookingControllerTests
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         var input = new CreateBookingInput { ShowtimeId = 1, SeatNumbers = [1, 2, 3] };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         Assert.IsType<UnauthorizedResult>(result.Result);
     }
@@ -62,13 +62,13 @@ public class BookingControllerTests
     public async Task Create_CallsBookingServiceWithHeaderUserId()
     {
         var svc = new Mock<IBookingService>();
-        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateBookingInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateBookingAsync(It.IsAny<CreateBookingInput>()))
            .ReturnsAsync(MakeResponse());
         var controller = BuildController(svc.Object, userId: 42);
         var input = new CreateBookingInput { ShowtimeId = 1, SeatNumbers = [1, 2, 3] };
 
-        await controller.Create(input, CancellationToken.None);
+        await controller.Create(input);
 
-        svc.Verify(s => s.CreateBookingAsync(It.Is<CreateBookingInput>(i => i.UserId == 42), CancellationToken.None), Times.Once);
+        svc.Verify(s => s.CreateBookingAsync(It.Is<CreateBookingInput>(i => i.UserId == 42)), Times.Once);
     }
 }

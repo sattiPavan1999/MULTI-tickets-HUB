@@ -9,22 +9,17 @@ public class Query
 {
     public async Task<List<UserDto>> GetUsers(
         [Service] IIdentityService identityService,
-        [Service] IHttpContextAccessor httpContextAccessor,
-        CancellationToken ct)
+        [Service] IHttpContextAccessor httpContextAccessor)
     {
         var token = ExtractToken(httpContextAccessor);
-        return await identityService.GetAllUsersAsync(token, ct);
+        return await identityService.GetAllUsersAsync(token);
     }
 
-    public async Task<List<MovieDto>> GetMovies(
-        [Service] IMovieService movieService,
-        CancellationToken ct)
-        => await movieService.GetAllMoviesAsync(ct);
+    public async Task<List<MovieDto>> GetMovies([Service] IMovieService movieService)
+        => await movieService.GetAllMoviesAsync();
 
-    public async Task<List<TrainDto>> GetTrains(
-        [Service] ITrainService trainService,
-        CancellationToken ct)
-        => await trainService.GetAllTrainsAsync(ct);
+    public async Task<List<TrainDto>> GetTrains([Service] ITrainService trainService)
+        => await trainService.GetAllTrainsAsync();
 
     private static string ExtractToken(IHttpContextAccessor accessor)
     {

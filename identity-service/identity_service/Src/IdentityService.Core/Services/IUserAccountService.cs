@@ -4,9 +4,9 @@ namespace IdentityService.Core.Services;
 
 public interface IUserAccountService
 {
-    Task<UserType?> GetUserByIdAsync(int id, CancellationToken ct = default);
-    Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input, CancellationToken ct = default);
-    Task<List<UserType>> GetAllUsersAsync(CancellationToken ct = default);
-    Task<int> GetUserCountAsync(CancellationToken ct = default);
-    Task<OperationResult> ToggleUserStatusAsync(int userId, CancellationToken ct = default);
+    Task<UserType?> GetUserByIdAsync(int id);
+    Task<UserType> UpdateProfileAsync(int userId, UpdateProfileInput input);
+    Task<List<UserType>> GetAllUsersAsync();
+    Task<int> GetUserCountAsync();
+    Task<OperationResult> ToggleUserStatusAsync(int userId);
 }

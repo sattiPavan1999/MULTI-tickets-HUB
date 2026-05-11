@@ -4,6 +4,6 @@ namespace IdentityService.Core.Services;
 
 public interface IPasswordService
 {
-    Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input, CancellationToken ct = default);
-    Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input, CancellationToken ct = default);
+    Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordInput input);
+    Task<OperationResult> ResetPasswordAsync(ResetPasswordInput input);
 }

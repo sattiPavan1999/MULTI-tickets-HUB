@@ -9,13 +9,13 @@ namespace MovieService.Endpoints.Controllers;
 public class BookingController(IBookingService bookingService) : ControllerBase
 {
     [HttpPost]
-    public async Task<ActionResult<BookingResponse>> Create([FromBody] CreateBookingInput input, CancellationToken ct)
+    public async Task<ActionResult<BookingResponse>> Create([FromBody] CreateBookingInput input)
     {
         if (!int.TryParse(Request.Headers["X-User-Id"].FirstOrDefault(), out var userId) || userId <= 0)
             return Unauthorized();
 
         input.UserId = userId;
-        var booking = await bookingService.CreateBookingAsync(input, ct);
+        var booking = await bookingService.CreateBookingAsync(input);
         return StatusCode(201, booking);
     }
 }

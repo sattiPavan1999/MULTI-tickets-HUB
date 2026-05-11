@@ -90,7 +90,7 @@ public class TrainServiceTests
     {
         var trainRepo = new Mock<ITrainRepository>();
         var seatRepo = new Mock<ISeatAvailabilityRepository>();
-        trainRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+        trainRepo.Setup(r => r.GetAllAsync())
             .ReturnsAsync([new Train { Id = 1, TrainName = "T", TrainNumber = "1", Source = "A", Destination = "B", DepartureTime = DateTime.UtcNow, ArrivalTime = DateTime.UtcNow.AddHours(5), Price = 500m }]);
         var svc = new TrainService.Core.Services.TrainService(
             trainRepo.Object, seatRepo.Object,

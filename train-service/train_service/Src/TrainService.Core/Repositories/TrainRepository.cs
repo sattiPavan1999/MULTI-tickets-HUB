@@ -7,19 +7,19 @@ namespace TrainService.Core.Repositories;
 
 public class TrainRepository(TrainDbContext context, ILogger<TrainRepository> logger) : BaseRepository<Train>(context), ITrainRepository
 {
-    public async Task<Train?> GetByTrainNumberAsync(string trainNumber, CancellationToken ct = default)
+    public async Task<Train?> GetByTrainNumberAsync(string trainNumber)
     {
         logger.LogDebug("Fetching train by number: {TrainNumber}", trainNumber);
-        return await context.Trains.FirstOrDefaultAsync(t => t.TrainNumber == trainNumber, ct);
+        return await context.Trains.FirstOrDefaultAsync(t => t.TrainNumber == trainNumber);
     }
 
-    public async Task<List<Train>> GetAllAsync(CancellationToken ct = default)
+    public async Task<List<Train>> GetAllAsync()
     {
         logger.LogDebug("Fetching all trains");
-        return await context.Trains.ToListAsync(ct);
+        return await context.Trains.ToListAsync();
     }
 
-    public async Task<List<Train>> SearchByRouteAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false, CancellationToken ct = default)
+    public async Task<List<Train>> SearchByRouteAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false)
     {
         logger.LogDebug("Searching trains: source={Source}, destination={Destination}, sortBy={SortBy}, requiresAvailability={RequiresAvailability}", source, destination, sortBy, requiresAvailability);
         var query = context.Trains.AsNoTracking().AsQueryable();
@@ -40,6 +40,6 @@ public class TrainRepository(TrainDbContext context, ILogger<TrainRepository> lo
             _           => query.OrderBy(t => t.Id)
         };
 
-        return await query.ToListAsync(ct);
+        return await query.ToListAsync();
     }
 }

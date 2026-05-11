@@ -4,12 +4,12 @@ namespace TrainService.Core.Services;
 
 public interface ITrainService
 {
-    Task<List<TrainResponse>> GetAllTrainsAsync(CancellationToken ct = default);
-    Task<List<TrainResponse>> SearchTrainsAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false, CancellationToken ct = default);
-    Task<TrainResponse?> GetTrainByIdAsync(int id, CancellationToken ct = default);
-    Task<TrainResponse> CreateTrainAsync(CreateTrainInput input, CancellationToken ct = default);
-    Task<TrainResponse> UpdateTrainAsync(int id, UpdateTrainInput input, CancellationToken ct = default);
-    Task DeleteTrainAsync(int id, CancellationToken ct = default);
-    Task<List<SeatAvailabilityResponse>> GetSeatAvailabilityAsync(int trainId, CancellationToken ct = default);
-    Task<SeatAvailabilityResponse> UpdateSeatAvailabilityAsync(int trainId, SeatAvailabilityInput input, CancellationToken ct = default);
+    Task<List<TrainResponse>> GetAllTrainsAsync();
+    Task<List<TrainResponse>> SearchTrainsAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false);
+    Task<TrainResponse?> GetTrainByIdAsync(int id);
+    Task<TrainResponse> CreateTrainAsync(CreateTrainInput input);
+    Task<TrainResponse> UpdateTrainAsync(int id, UpdateTrainInput input);
+    Task DeleteTrainAsync(int id);
+    Task<List<SeatAvailabilityResponse>> GetSeatAvailabilityAsync(int trainId);
+    Task<SeatAvailabilityResponse> UpdateSeatAvailabilityAsync(int trainId, SeatAvailabilityInput input);
 }

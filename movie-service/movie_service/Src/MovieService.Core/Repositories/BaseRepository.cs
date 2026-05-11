@@ -6,30 +6,30 @@ public abstract class BaseRepository<T>(DbContext context) : IBaseRepository<T> 
 {
     protected readonly DbContext Context = context;
 
-    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default)
-        => await Context.Set<T>().FindAsync([id], ct);
+    public async Task<T?> GetByIdAsync(int id)
+        => await Context.Set<T>().FindAsync([id]);
 
-    public async Task<T> AddAsync(T entity, CancellationToken ct = default)
+    public async Task<T> AddAsync(T entity)
     {
-        await Context.Set<T>().AddAsync(entity, ct);
-        await Context.SaveChangesAsync(ct);
+        await Context.Set<T>().AddAsync(entity);
+        await Context.SaveChangesAsync();
         return entity;
     }
 
-    public async Task<T> UpdateAsync(T entity, CancellationToken ct = default)
+    public async Task<T> UpdateAsync(T entity)
     {
         Context.Set<T>().Update(entity);
-        await Context.SaveChangesAsync(ct);
+        await Context.SaveChangesAsync();
         return entity;
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    public async Task DeleteAsync(int id)
     {
-        var entity = await GetByIdAsync(id, ct);
+        var entity = await GetByIdAsync(id);
         if (entity is not null)
         {
             Context.Set<T>().Remove(entity);
-            await Context.SaveChangesAsync(ct);
+            await Context.SaveChangesAsync();
         }
     }
 

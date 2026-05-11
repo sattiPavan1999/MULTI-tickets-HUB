@@ -40,7 +40,7 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task AddAsync_PersistsAndReturnsTrain()
     {
-        var train = await _repo.AddAsync(MakeTrain("12345"), CancellationToken.None);
+        var train = await _repo.AddAsync(MakeTrain("12345"));
 
         train.Id.Should().BeGreaterThan(0);
         train.TrainNumber.Should().Be("12345");
@@ -49,9 +49,9 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetByIdAsync_ExistingTrain_ReturnsTrain()
     {
-        var created = await _repo.AddAsync(MakeTrain(), CancellationToken.None);
+        var created = await _repo.AddAsync(MakeTrain());
 
-        var found = await _repo.GetByIdAsync(created.Id, CancellationToken.None);
+        var found = await _repo.GetByIdAsync(created.Id);
 
         found.Should().NotBeNull();
         found!.Id.Should().Be(created.Id);
@@ -60,16 +60,16 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetByIdAsync_NonExistent_ReturnsNull()
     {
-        var found = await _repo.GetByIdAsync(99999, CancellationToken.None);
+        var found = await _repo.GetByIdAsync(99999);
         found.Should().BeNull();
     }
 
     [Fact]
     public async Task GetByTrainNumberAsync_ExistingNumber_ReturnsTrain()
     {
-        await _repo.AddAsync(MakeTrain("99999"), CancellationToken.None);
+        await _repo.AddAsync(MakeTrain("99999"));
 
-        var found = await _repo.GetByTrainNumberAsync("99999", CancellationToken.None);
+        var found = await _repo.GetByTrainNumberAsync("99999");
 
         found.Should().NotBeNull();
         found!.TrainNumber.Should().Be("99999");
@@ -78,10 +78,10 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task GetAllAsync_ReturnsAllTrains()
     {
-        await _repo.AddAsync(MakeTrain(), CancellationToken.None);
-        await _repo.AddAsync(MakeTrain(), CancellationToken.None);
+        await _repo.AddAsync(MakeTrain());
+        await _repo.AddAsync(MakeTrain());
 
-        var all = await _repo.GetAllAsync(CancellationToken.None);
+        var all = await _repo.GetAllAsync();
 
         all.Should().HaveCount(2);
     }
@@ -89,10 +89,10 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task UpdateAsync_PersistsChanges()
     {
-        var train = await _repo.AddAsync(MakeTrain(), CancellationToken.None);
+        var train = await _repo.AddAsync(MakeTrain());
         train.TrainName = "Updated Express";
 
-        var updated = await _repo.UpdateAsync(train, CancellationToken.None);
+        var updated = await _repo.UpdateAsync(train);
 
         updated.TrainName.Should().Be("Updated Express");
     }
@@ -100,19 +100,19 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task DeleteAsync_RemovesTrain()
     {
-        var train = await _repo.AddAsync(MakeTrain(), CancellationToken.None);
+        var train = await _repo.AddAsync(MakeTrain());
 
-        await _repo.DeleteAsync(train.Id, CancellationToken.None);
+        await _repo.DeleteAsync(train.Id);
 
-        var found = await _repo.GetByIdAsync(train.Id, CancellationToken.None);
+        var found = await _repo.GetByIdAsync(train.Id);
         found.Should().BeNull();
     }
 
     [Fact]
     public async Task Query_ReturnsIQueryable()
     {
-        await _repo.AddAsync(MakeTrain(), CancellationToken.None);
-        await _repo.AddAsync(MakeTrain(), CancellationToken.None);
+        await _repo.AddAsync(MakeTrain());
+        await _repo.AddAsync(MakeTrain());
 
         var count = _repo.Query().Count();
 

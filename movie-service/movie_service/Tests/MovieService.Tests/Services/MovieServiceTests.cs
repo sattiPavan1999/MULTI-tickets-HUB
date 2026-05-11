@@ -140,7 +140,7 @@ public class MovieServiceTests
     {
         var entity = MakeEntity();
         var repo = new Mock<IMovieRepository>();
-        repo.Setup(r => r.GetByIdAsync(entity.Id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        repo.Setup(r => r.GetByIdAsync(entity.Id)).ReturnsAsync(entity);
         var svc = BuildMocked(repo);
 
         var result = await svc.GetMovieByIdAsync(entity.Id);
@@ -153,7 +153,7 @@ public class MovieServiceTests
     public async Task GetMovieById_NonExistentId_ReturnsNull()
     {
         var repo = new Mock<IMovieRepository>();
-        repo.Setup(r => r.GetByIdAsync(99, It.IsAny<CancellationToken>())).ReturnsAsync((Movie?)null);
+        repo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((Movie?)null);
         var svc = BuildMocked(repo);
 
         var result = await svc.GetMovieByIdAsync(99);

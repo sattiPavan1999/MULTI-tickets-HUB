@@ -16,30 +16,30 @@ public class ShowtimeService(
     IMapper mapper,
     ILogger<ShowtimeService> logger) : IShowtimeService
 {
-    public async Task<List<ShowtimeResponse>> GetShowtimesByMovieAsync(int movieId, CancellationToken ct = default)
+    public async Task<List<ShowtimeResponse>> GetShowtimesByMovieAsync(int movieId)
     {
-        var showtimes = await showtimeRepository.GetByMovieIdAsync(movieId, ct);
+        var showtimes = await showtimeRepository.GetByMovieIdAsync(movieId);
         return mapper.Map<List<ShowtimeResponse>>(showtimes);
     }
 
-    public async Task<ShowtimeResponse> CreateShowtimeAsync(CreateShowtimeInput input, CancellationToken ct = default)
+    public async Task<ShowtimeResponse> CreateShowtimeAsync(CreateShowtimeInput input)
     {
-        await validator.ValidateAndThrowAsync(input, ct);
+        await validator.ValidateAndThrowAsync(input);
 
         var showDate = DateOnly.Parse(input.ShowDate);
         var showTime = TimeOnly.Parse(input.ShowTime);
 
-        var movie = await movieRepository.GetByIdAsync(input.MovieId, ct)
+        var movie = await movieRepository.GetByIdAsync(input.MovieId)
             ?? throw new NotFoundException($"Movie {input.MovieId} not found");
 
         // Check for exact duplicate on the same movie
         var exactDuplicate = await showtimeRepository.GetByCompositeKeyAsync(
-            input.MovieId, showDate, showTime, input.ScreenNumber, ct);
+            input.MovieId, showDate, showTime, input.ScreenNumber);
         if (exactDuplicate is not null)
             throw new ConflictException($"This exact showtime already exists for {movie.Title}");
 
         // Enforce 4-hour gap rule: no two showtimes within 4 hours on the same screen on the same date
-        var screenShowtimes = await showtimeRepository.GetByScreenAndDateAsync(input.ScreenNumber, showDate, ct);
+        var screenShowtimes = await showtimeRepository.GetByScreenAndDateAsync(input.ScreenNumber, showDate);
         var conflict = screenShowtimes.FirstOrDefault(s =>
             Math.Abs((showTime - s.ShowTime).TotalHours) < 4);
         if (conflict is not null)
@@ -60,26 +60,26 @@ public class ShowtimeService(
             AvailableSeats = input.TotalSeats
         };
 
-        var created = await showtimeRepository.AddAsync(showtime, ct);
+        var created = await showtimeRepository.AddAsync(showtime);
         logger.LogInformation("Showtime created for movie {MovieId} on {Date} at {Time}", input.MovieId, input.ShowDate, input.ShowTime);
         return mapper.Map<ShowtimeResponse>(created);
     }
 
-    public async Task DeleteShowtimeAsync(int id, CancellationToken ct = default)
+    public async Task DeleteShowtimeAsync(int id)
     {
-        var showtime = await showtimeRepository.GetByIdAsync(id, ct)
+        var showtime = await showtimeRepository.GetByIdAsync(id)
             ?? throw new NotFoundException($"Showtime {id} not found");
 
-        await showtimeRepository.DeleteAsync(showtime.Id, ct);
+        await showtimeRepository.DeleteAsync(showtime.Id);
         logger.LogInformation("Showtime {Id} deleted", id);
     }
 
-    public async Task<SeatStatusResponse> GetSeatStatusAsync(int showtimeId, CancellationToken ct = default)
+    public async Task<SeatStatusResponse> GetSeatStatusAsync(int showtimeId)
     {
-        var showtime = await showtimeRepository.GetByIdAsync(showtimeId, ct)
+        var showtime = await showtimeRepository.GetByIdAsync(showtimeId)
             ?? throw new NotFoundException($"Showtime {showtimeId} not found");
 
-        var bookings = await bookingRepository.GetByShowtimeAsync(showtimeId, ct);
+        var bookings = await bookingRepository.GetByShowtimeAsync(showtimeId);
 
         var bookedSeats = bookings
             .Where(b => !string.IsNullOrWhiteSpace(b.SeatNumbers))

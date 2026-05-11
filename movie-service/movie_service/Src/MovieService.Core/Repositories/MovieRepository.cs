@@ -7,9 +7,9 @@ namespace MovieService.Core.Repositories;
 
 public class MovieRepository(MovieDbContext context, ILogger<MovieRepository> logger) : BaseRepository<Movie>(context), IMovieRepository
 {
-    public async Task<List<Movie>> GetAllAsync(CancellationToken ct = default)
+    public async Task<List<Movie>> GetAllAsync()
     {
         logger.LogDebug("Fetching all movies");
-        return await context.Movies.ToListAsync(ct);
+        return await context.Movies.ToListAsync();
     }
 }

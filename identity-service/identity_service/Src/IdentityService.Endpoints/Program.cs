@@ -114,7 +114,7 @@ try
             app.Logger.LogWarning("Using default admin password — set Admin:DefaultPassword env var in production");
 
         var userRepo = seedScope.ServiceProvider.GetRequiredService<IUserRepository>();
-        if (!await userRepo.EmailExistsAsync("admin@email.com", CancellationToken.None))
+        if (!await userRepo.EmailExistsAsync("admin@email.com"))
         {
             await userRepo.AddAsync(new User
             {
@@ -124,7 +124,7 @@ try
                 PhoneNumber = "0000000000",
                 Role = IdentityService.Core.Models.Roles.Admin,
                 IsActive = true
-            }, CancellationToken.None);
+            });
             app.Logger.LogInformation("Default admin user seeded");
         }
     }

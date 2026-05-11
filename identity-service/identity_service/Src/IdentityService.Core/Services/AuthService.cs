@@ -17,11 +17,11 @@ public class AuthService(
     IMapper mapper,
     ILogger<AuthService> logger) : IAuthService
 {
-    public async Task<UserType> RegisterAsync(RegisterInput input, CancellationToken ct = default)
+    public async Task<UserType> RegisterAsync(RegisterInput input)
     {
-        await registerValidator.ValidateAndThrowAsync(input, ct);
+        await registerValidator.ValidateAndThrowAsync(input);
 
-        if (await userRepository.EmailExistsAsync(input.Email, ct))
+        if (await userRepository.EmailExistsAsync(input.Email))
         {
             logger.LogWarning("Registration attempt with existing email: {Email}", input.Email);
             throw new ConflictException("Email already registered");
@@ -36,16 +36,16 @@ public class AuthService(
             Role = Roles.User
         };
 
-        var created = await userRepository.AddAsync(user, ct);
+        var created = await userRepository.AddAsync(user);
         await auditService.LogAsync($"User registered: {created.Email}");
         return mapper.Map<UserType>(created);
     }
 
-    public async Task<LoginResponse> LoginAsync(LoginInput input, CancellationToken ct = default)
+    public async Task<LoginResponse> LoginAsync(LoginInput input)
     {
-        await loginValidator.ValidateAndThrowAsync(input, ct);
+        await loginValidator.ValidateAndThrowAsync(input);
 
-        var user = await userRepository.GetByEmailAsync(input.Email, ct);
+        var user = await userRepository.GetByEmailAsync(input.Email);
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(input.Password, user.PasswordHash))
         {

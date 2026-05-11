@@ -11,37 +11,37 @@ namespace AdminBFF.Endpoints.Controllers;
 public class AdminTrainController(ITrainService trainService) : ControllerBase
 {
     [HttpPost]
-    public async Task<ActionResult<TrainDto>> Create([FromBody] CreateTrainRequest request, CancellationToken ct)
+    public async Task<ActionResult<TrainDto>> Create([FromBody] CreateTrainRequest request)
     {
-        var train = await trainService.CreateTrainAsync(request, ct);
+        var train = await trainService.CreateTrainAsync(request);
         return CreatedAtAction(null, new { id = train.Id }, train);
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<TrainDto>> Update(int id, [FromBody] UpdateTrainRequest request, CancellationToken ct)
+    public async Task<ActionResult<TrainDto>> Update(int id, [FromBody] UpdateTrainRequest request)
     {
-        var train = await trainService.UpdateTrainAsync(id, request, ct);
+        var train = await trainService.UpdateTrainAsync(id, request);
         return Ok(train);
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    public async Task<IActionResult> Delete(int id)
     {
-        await trainService.DeleteTrainAsync(id, ct);
+        await trainService.DeleteTrainAsync(id);
         return NoContent();
     }
 
     [HttpGet("{id:int}/seat-availability")]
-    public async Task<ActionResult<List<SeatAvailabilityDto>>> GetSeatAvailability(int id, CancellationToken ct)
+    public async Task<ActionResult<List<SeatAvailabilityDto>>> GetSeatAvailability(int id)
     {
-        var seats = await trainService.GetSeatAvailabilityAsync(id, ct);
+        var seats = await trainService.GetSeatAvailabilityAsync(id);
         return Ok(seats);
     }
 
     [HttpPut("{id:int}/seat-availability")]
-    public async Task<ActionResult<SeatAvailabilityDto>> UpdateSeatAvailability(int id, [FromBody] UpdateSeatAvailabilityRequest request, CancellationToken ct)
+    public async Task<ActionResult<SeatAvailabilityDto>> UpdateSeatAvailability(int id, [FromBody] UpdateSeatAvailabilityRequest request)
     {
-        var result = await trainService.UpdateSeatAvailabilityAsync(id, request, ct);
+        var result = await trainService.UpdateSeatAvailabilityAsync(id, request);
         return Ok(result);
     }
 }

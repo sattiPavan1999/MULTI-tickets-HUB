@@ -8,30 +8,30 @@ public abstract class BaseRepository<T>(IdentityDbContext context) : IBaseReposi
 {
     protected readonly IdentityDbContext _context = context;
 
-    public virtual async Task<T?> GetByIdAsync(int id, CancellationToken ct = default)
-        => await _context.Set<T>().FindAsync([id], ct);
+    public virtual async Task<T?> GetByIdAsync(int id)
+        => await _context.Set<T>().FindAsync([id]);
 
-    public virtual async Task<T> AddAsync(T entity, CancellationToken ct = default)
+    public virtual async Task<T> AddAsync(T entity)
     {
         _context.Set<T>().Add(entity);
-        await _context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync();
         return entity;
     }
 
-    public virtual async Task<T> UpdateAsync(T entity, CancellationToken ct = default)
+    public virtual async Task<T> UpdateAsync(T entity)
     {
         _context.Set<T>().Update(entity);
-        await _context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync();
         return entity;
     }
 
-    public virtual async Task DeleteAsync(int id, CancellationToken ct = default)
+    public virtual async Task DeleteAsync(int id)
     {
-        var entity = await GetByIdAsync(id, ct);
+        var entity = await GetByIdAsync(id);
         if (entity is not null)
         {
             _context.Set<T>().Remove(entity);
-            await _context.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync();
         }
     }
 

@@ -16,20 +16,20 @@ public class BookingService(
     MovieDbContext dbContext,
     ILogger<BookingService> logger) : IBookingService
 {
-    public async Task<BookingResponse> CreateBookingAsync(CreateBookingInput input, CancellationToken ct = default)
+    public async Task<BookingResponse> CreateBookingAsync(CreateBookingInput input)
     {
-        await validator.ValidateAndThrowAsync(input, ct);
+        await validator.ValidateAndThrowAsync(input);
 
-        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         try
         {
-            var showtime = await dbContext.Showtimes.FindAsync([input.ShowtimeId], ct)
+            var showtime = await dbContext.Showtimes.FindAsync([input.ShowtimeId])
                 ?? throw new NotFoundException($"Showtime {input.ShowtimeId} not found");
 
             var alreadyBooked = await dbContext.Bookings
                 .Where(b => b.ShowtimeId == input.ShowtimeId && !string.IsNullOrEmpty(b.SeatNumbers))
                 .Select(b => b.SeatNumbers)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             var bookedSet = alreadyBooked
                 .SelectMany(s => s.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -56,8 +56,8 @@ public class BookingService(
             showtime.AvailableSeats -= input.SeatNumbers.Count;
             dbContext.Showtimes.Update(showtime);
             dbContext.Bookings.Add(booking);
-            await dbContext.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+            await dbContext.SaveChangesAsync();
+            await tx.CommitAsync();
 
             logger.LogInformation("Booking created for showtime {ShowtimeId} by user {UserId}, seats {Seats}",
                 input.ShowtimeId, input.UserId, booking.SeatNumbers);
@@ -66,12 +66,12 @@ public class BookingService(
         }
         catch (DbUpdateException)
         {
-            await tx.RollbackAsync(ct);
+            await tx.RollbackAsync();
             throw new ConflictException("Seats filled — another booking completed first. Please try again.");
         }
         catch
         {
-            await tx.RollbackAsync(ct);
+            await tx.RollbackAsync();
             throw;
         }
     }

@@ -41,11 +41,11 @@ public class MovieControllerTests
     public async Task GetAll_ReturnsOkWithMovies()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetAllMoviesAsync(It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.GetAllMoviesAsync(It.IsAny<bool?>()))
            .ReturnsAsync([MakeResponse(), MakeResponse()]);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.GetAll(null, CancellationToken.None);
+        var result = await controller.GetAll(null);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<MovieResponse>>(ok.Value);
@@ -57,16 +57,16 @@ public class MovieControllerTests
     {
         var active = MakeResponse();
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetAllMoviesAsync(true, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.GetAllMoviesAsync(true))
            .ReturnsAsync([active]);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.GetAll(activeOnly: true, CancellationToken.None);
+        var result = await controller.GetAll(activeOnly: true);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<MovieResponse>>(ok.Value);
         list.Should().HaveCount(1);
-        svc.Verify(s => s.GetAllMoviesAsync(true, It.IsAny<CancellationToken>()), Times.Once);
+        svc.Verify(s => s.GetAllMoviesAsync(true), Times.Once);
     }
 
     // ── GetById ───────────────────────────────────────────────────────────────
@@ -76,10 +76,10 @@ public class MovieControllerTests
     {
         var movie = MakeResponse(1);
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetMovieByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(movie);
+        svc.Setup(s => s.GetMovieByIdAsync(1)).ReturnsAsync(movie);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.GetById(1, CancellationToken.None);
+        var result = await controller.GetById(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.IsType<MovieResponse>(ok.Value);
@@ -89,10 +89,10 @@ public class MovieControllerTests
     public async Task GetById_NotFound_Returns404()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.GetMovieByIdAsync(99, It.IsAny<CancellationToken>())).ReturnsAsync((MovieResponse?)null);
+        svc.Setup(s => s.GetMovieByIdAsync(99)).ReturnsAsync((MovieResponse?)null);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.GetById(99, CancellationToken.None);
+        var result = await controller.GetById(99);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -104,12 +104,12 @@ public class MovieControllerTests
     {
         var created = MakeResponse(1);
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.CreateMovieAsync(It.IsAny<CreateMovieInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateMovieAsync(It.IsAny<CreateMovieInput>()))
            .ReturnsAsync(created);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
         var input = new CreateMovieInput { Title = "Test", Genre = "Action", Duration = 120, PosterUrl = "https://example.com/p.jpg" };
 
-        var result = await controller.Create(input, CancellationToken.None);
+        var result = await controller.Create(input);
 
         var createdAt = Assert.IsType<CreatedAtActionResult>(result.Result);
         createdAt.StatusCode.Should().Be(201);
@@ -119,14 +119,14 @@ public class MovieControllerTests
     public async Task Create_CallsService_WithInput()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.CreateMovieAsync(It.IsAny<CreateMovieInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.CreateMovieAsync(It.IsAny<CreateMovieInput>()))
            .ReturnsAsync(MakeResponse());
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
         var input = new CreateMovieInput { Title = "T", Genre = "G", Duration = 100, PosterUrl = "https://example.com/p.jpg" };
 
-        await controller.Create(input, CancellationToken.None);
+        await controller.Create(input);
 
-        svc.Verify(s => s.CreateMovieAsync(input, CancellationToken.None), Times.Once);
+        svc.Verify(s => s.CreateMovieAsync(input), Times.Once);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -136,11 +136,11 @@ public class MovieControllerTests
     {
         var updated = MakeResponse(1);
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.UpdateMovieAsync(1, It.IsAny<UpdateMovieInput>(), It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.UpdateMovieAsync(1, It.IsAny<UpdateMovieInput>()))
            .ReturnsAsync(updated);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.Update(1, new UpdateMovieInput { Title = "New" }, CancellationToken.None);
+        var result = await controller.Update(1, new UpdateMovieInput { Title = "New" });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.IsType<MovieResponse>(ok.Value);
@@ -152,10 +152,10 @@ public class MovieControllerTests
     public async Task Delete_ExistingMovie_Returns204()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.DeleteMovieAsync(1, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        svc.Setup(s => s.DeleteMovieAsync(1)).Returns(Task.CompletedTask);
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.Delete(1, CancellationToken.None);
+        var result = await controller.Delete(1);
 
         Assert.IsType<NoContentResult>(result);
     }
@@ -166,11 +166,11 @@ public class MovieControllerTests
     public async Task ToggleStatus_Returns200WithResult()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.ToggleMovieStatusAsync(1, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.ToggleMovieStatusAsync(1))
            .ReturnsAsync(new OperationResult { Success = true, Message = "Movie deactivated" });
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        var result = await controller.ToggleStatus(1, CancellationToken.None);
+        var result = await controller.ToggleStatus(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<OperationResult>(ok.Value);
@@ -181,13 +181,13 @@ public class MovieControllerTests
     public async Task ToggleStatus_CallsService_WithId()
     {
         var svc = new Mock<IMovieService>();
-        svc.Setup(s => s.ToggleMovieStatusAsync(5, It.IsAny<CancellationToken>()))
+        svc.Setup(s => s.ToggleMovieStatusAsync(5))
            .ReturnsAsync(new OperationResult { Success = true });
         var controller = new MovieController(svc.Object, new Mock<IShowtimeService>().Object);
 
-        await controller.ToggleStatus(5, CancellationToken.None);
+        await controller.ToggleStatus(5);
 
-        svc.Verify(s => s.ToggleMovieStatusAsync(5, CancellationToken.None), Times.Once);
+        svc.Verify(s => s.ToggleMovieStatusAsync(5), Times.Once);
     }
 
     // ── Showtime actions ──────────────────────────────────────────────────────
@@ -196,11 +196,11 @@ public class MovieControllerTests
     public async Task GetShowtimes_ReturnsOkWithList()
     {
         var showtimeSvc = new Mock<IShowtimeService>();
-        showtimeSvc.Setup(s => s.GetShowtimesByMovieAsync(1, It.IsAny<CancellationToken>()))
+        showtimeSvc.Setup(s => s.GetShowtimesByMovieAsync(1))
                    .ReturnsAsync([MakeShowtimeResponse(), MakeShowtimeResponse()]);
         var controller = new MovieController(new Mock<IMovieService>().Object, showtimeSvc.Object);
 
-        var result = await controller.GetShowtimes(1, CancellationToken.None);
+        var result = await controller.GetShowtimes(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var list = Assert.IsType<List<ShowtimeResponse>>(ok.Value);
@@ -211,11 +211,11 @@ public class MovieControllerTests
     public async Task GetSeatStatus_ReturnsOk()
     {
         var showtimeSvc = new Mock<IShowtimeService>();
-        showtimeSvc.Setup(s => s.GetSeatStatusAsync(1, It.IsAny<CancellationToken>()))
+        showtimeSvc.Setup(s => s.GetSeatStatusAsync(1))
                    .ReturnsAsync(new SeatStatusResponse { ShowtimeId = 1, TotalSeats = 50, BookedSeats = [1, 2] });
         var controller = new MovieController(new Mock<IMovieService>().Object, showtimeSvc.Object);
 
-        var result = await controller.GetSeatStatus(1, CancellationToken.None);
+        var result = await controller.GetSeatStatus(1);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.IsType<SeatStatusResponse>(ok.Value);
@@ -226,11 +226,11 @@ public class MovieControllerTests
     {
         var showtime = MakeShowtimeResponse(1);
         var showtimeSvc = new Mock<IShowtimeService>();
-        showtimeSvc.Setup(s => s.CreateShowtimeAsync(It.IsAny<CreateShowtimeInput>(), It.IsAny<CancellationToken>()))
+        showtimeSvc.Setup(s => s.CreateShowtimeAsync(It.IsAny<CreateShowtimeInput>()))
                    .ReturnsAsync(showtime);
         var controller = new MovieController(new Mock<IMovieService>().Object, showtimeSvc.Object);
 
-        var result = await controller.CreateShowtime(1, new CreateShowtimeInput(), CancellationToken.None);
+        var result = await controller.CreateShowtime(1, new CreateShowtimeInput());
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         created.StatusCode.Should().Be(201);
@@ -240,10 +240,10 @@ public class MovieControllerTests
     public async Task DeleteShowtime_Returns204()
     {
         var showtimeSvc = new Mock<IShowtimeService>();
-        showtimeSvc.Setup(s => s.DeleteShowtimeAsync(1, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        showtimeSvc.Setup(s => s.DeleteShowtimeAsync(1)).Returns(Task.CompletedTask);
         var controller = new MovieController(new Mock<IMovieService>().Object, showtimeSvc.Object);
 
-        var result = await controller.DeleteShowtime(1, CancellationToken.None);
+        var result = await controller.DeleteShowtime(1);
 
         Assert.IsType<NoContentResult>(result);
     }

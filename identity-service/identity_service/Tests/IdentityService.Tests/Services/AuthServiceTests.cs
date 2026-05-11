@@ -144,8 +144,8 @@ public class AuthServiceTests
         var input = RegisterFaker.Generate();
         var entity = MakeEntity(input.Email);
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync(input.Email, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        userRepo.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        userRepo.Setup(r => r.EmailExistsAsync(input.Email)).ReturnsAsync(false);
+        userRepo.Setup(r => r.AddAsync(It.IsAny<User>())).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Auth.RegisterAsync(input);
@@ -159,7 +159,7 @@ public class AuthServiceTests
     {
         var input = RegisterFaker.Generate();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync(input.Email, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        userRepo.Setup(r => r.EmailExistsAsync(input.Email)).ReturnsAsync(true);
         var svc = BuildMocked(userRepo);
 
         await svc.Auth.Invoking(s => s.RegisterAsync(input))
@@ -171,10 +171,10 @@ public class AuthServiceTests
     {
         var input = RegisterFaker.Generate();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
         User? captured = null;
-        userRepo.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
-            .Callback<User, CancellationToken>((u, _) => captured = u)
+        userRepo.Setup(r => r.AddAsync(It.IsAny<User>()))
+            .Callback<User>(u => captured = u)
             .ReturnsAsync(MakeEntity());
         var svc = BuildMocked(userRepo);
 
@@ -203,7 +203,7 @@ public class AuthServiceTests
     {
         var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email)).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Auth.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" });
@@ -216,7 +216,7 @@ public class AuthServiceTests
     public async Task Login_UnknownEmail_ThrowsUnauthorizedException()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
+        userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
         var svc = BuildMocked(userRepo);
 
         await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = "nobody@example.com", Password = "Password1!" }))
@@ -228,7 +228,7 @@ public class AuthServiceTests
     {
         var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email)).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
         await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "WrongPassword!" }))
@@ -240,7 +240,7 @@ public class AuthServiceTests
     {
         var entity = MakeEntity(isActive: false);
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByEmailAsync(entity.Email, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        userRepo.Setup(r => r.GetByEmailAsync(entity.Email)).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
         await svc.Auth.Invoking(s => s.LoginAsync(new LoginInput { Email = entity.Email, Password = "Password1!" }))
@@ -255,7 +255,7 @@ public class AuthServiceTests
     {
         var entity = MakeEntity();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByIdAsync(entity.Id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        userRepo.Setup(r => r.GetByIdAsync(entity.Id)).ReturnsAsync(entity);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Account.GetUserByIdAsync(entity.Id);
@@ -268,7 +268,7 @@ public class AuthServiceTests
     public async Task GetUserById_NonExistentUser_ReturnsNull()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetByIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
+        userRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((User?)null);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Account.GetUserByIdAsync(999);
@@ -283,7 +283,7 @@ public class AuthServiceTests
     {
         var entities = Enumerable.Range(1, 3).Select(_ => MakeEntity()).ToList();
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(entities);
+        userRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(entities);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Account.GetAllUsersAsync();
@@ -295,7 +295,7 @@ public class AuthServiceTests
     public async Task GetUserCount_ReturnsCountFromRepository()
     {
         var userRepo = new Mock<IUserRepository>();
-        userRepo.Setup(r => r.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(7);
+        userRepo.Setup(r => r.CountAsync()).ReturnsAsync(7);
         var svc = BuildMocked(userRepo);
 
         var result = await svc.Account.GetUserCountAsync();
