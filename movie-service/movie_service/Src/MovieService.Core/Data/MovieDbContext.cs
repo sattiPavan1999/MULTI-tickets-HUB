@@ -1,10 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MovieService.Core.Models;
+using MovieService.Core.Settings;
 
 namespace MovieService.Core.Data;
 
-public class MovieDbContext(DbContextOptions<MovieDbContext> options) : DbContext(options)
+public class MovieDbContext(
+    DbContextOptions<MovieDbContext> options,
+    IOptions<MovieCoreSettings>? settings = null
+) : DbContext(options)
 {
+    private readonly string _schema = settings?.Value.Db.DbSchema ?? "movies";
+
     public DbSet<Movie> Movies { get; set; } = null!;
     public DbSet<Showtime> Showtimes { get; set; } = null!;
     public DbSet<MovieBooking> Bookings { get; set; } = null!;
@@ -13,7 +20,7 @@ public class MovieDbContext(DbContextOptions<MovieDbContext> options) : DbContex
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.HasDefaultSchema("movies");
+        modelBuilder.HasDefaultSchema(_schema);
 
         modelBuilder.Entity<Movie>(entity =>
         {

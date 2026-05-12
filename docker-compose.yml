@@ -31,7 +31,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5001
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=identity_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - IdentitySettings__Core__Db__DbSchema=identity
+      - IdentitySettings__Core__Db__ConnectionString=Host=postgres;Port=5432;Database=identity_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
       - JwtSettings__Issuer=${JWT_ISSUER}
       - JwtSettings__Audience=${JWT_AUDIENCE}
@@ -59,7 +60,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5003
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=movies_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - MovieSettings__Core__Db__DbSchema=movies
+      - MovieSettings__Core__Db__ConnectionString=Host=postgres;Port=5432;Database=movies_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,7 +85,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5002
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=trains_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - TrainSettings__Core__Db__DbSchema=trains
+      - TrainSettings__Core__Db__ConnectionString=Host=postgres;Port=5432;Database=trains_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy

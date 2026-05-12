@@ -6,6 +6,7 @@ using MovieService.Core.Data;
 using MovieService.Core.Mapping;
 using MovieService.Core.Repositories;
 using MovieService.Core.Services;
+using MovieService.Core.Settings;
 using MovieService.Core.Validators;
 
 namespace MovieService.Core.Extensions;
@@ -14,11 +15,16 @@ public static class CoreServiceExtensions
 {
     public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        services.Configure<MovieCoreSettings>(configuration.GetSection("MovieSettings:Core"));
+
+        var settings = configuration.GetSection("MovieSettings:Core").Get<MovieCoreSettings>()
+            ?? throw new InvalidOperationException("MovieSettings:Core configuration section not found.");
 
         services.AddDbContext<MovieDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(
+                settings.Db.ConnectionString,
+                sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", settings.Db.DbSchema)
+            ));
 
         services.AddScoped<IMovieRepository, MovieRepository>();
         services.AddScoped<IShowtimeRepository, ShowtimeRepository>();

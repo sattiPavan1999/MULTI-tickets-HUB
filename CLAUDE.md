@@ -54,21 +54,23 @@ dotnet test train-service/train_service/Tests/TrainService.Tests/TrainService.Te
 
 ### EF Core migrations (run from each service's root directory)
 
+Each service uses an `IDesignTimeDbContextFactory` in its Core project. Migrations live in `Data/Migrations/` and the schema name comes from `appsettings.json` under `<Service>Settings:Core:Db:DbSchema`.
+
 ```bash
 # movie-service
 cd movie-service/movie_service
-dotnet ef migrations add <Name> --project Src/MovieService.Core --startup-project Src/MovieService.Endpoints
+dotnet ef migrations add <Name> --project Src/MovieService.Core --startup-project Src/MovieService.Endpoints -o Data/Migrations
 
 # train-service
 cd train-service/train_service
-dotnet ef migrations add <Name> --project Src/TrainService.Core --startup-project Src/TrainService.Endpoints
+dotnet ef migrations add <Name> --project Src/TrainService.Core --startup-project Src/TrainService.Endpoints -o Data/Migrations
 
 # identity-service
 cd identity-service/identity_service
-dotnet ef migrations add <Name> --project Src/IdentityService.Core --startup-project Src/IdentityService.Endpoints
+dotnet ef migrations add <Name> --project Src/IdentityService.Core --startup-project Src/IdentityService.Endpoints -o Data/Migrations
 ```
 
-Migrations run automatically at startup via `context.Database.Migrate()`. admin-bff has no database.
+Migrations run automatically at startup via `context.Database.Migrate()`. Migration history is tracked per schema in `<schema>.__EFMigrationsHistory`. admin-bff has no database.
 
 ### Frontend
 

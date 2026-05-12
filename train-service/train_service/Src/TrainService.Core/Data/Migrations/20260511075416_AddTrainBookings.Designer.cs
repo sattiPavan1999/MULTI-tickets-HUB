@@ -9,7 +9,7 @@ using TrainService.Core.Data;
 
 #nullable disable
 
-namespace TrainService.Core.Migrations
+namespace TrainService.Core.Data.Migrations
 {
     [DbContext(typeof(TrainDbContext))]
     [Migration("20260511075416_AddTrainBookings")]

@@ -1,10 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TrainService.Core.Models;
+using TrainService.Core.Settings;
 
 namespace TrainService.Core.Data;
 
-public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContext(options)
+public class TrainDbContext(
+    DbContextOptions<TrainDbContext> options,
+    IOptions<TrainCoreSettings>? settings = null
+) : DbContext(options)
 {
+    private readonly string _schema = settings?.Value.Db.DbSchema ?? "trains";
+
     public DbSet<Train> Trains { get; set; } = null!;
     public DbSet<TrainStop> TrainStops { get; set; } = null!;
     public DbSet<SeatAvailability> SeatAvailabilities { get; set; } = null!;
@@ -14,7 +21,7 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.HasDefaultSchema("trains");
+        modelBuilder.HasDefaultSchema(_schema);
 
         modelBuilder.Entity<Train>(entity =>
         {

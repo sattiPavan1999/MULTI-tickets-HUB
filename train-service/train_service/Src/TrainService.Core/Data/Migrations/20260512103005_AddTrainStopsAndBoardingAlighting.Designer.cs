@@ -9,11 +9,11 @@ using TrainService.Core.Data;
 
 #nullable disable
 
-namespace TrainService.Core.Migrations
+namespace TrainService.Core.Data.Migrations
 {
     [DbContext(typeof(TrainDbContext))]
-    [Migration("20260512072457_BookedAtIst")]
-    partial class BookedAtIst
+    [Migration("20260512103005_AddTrainStopsAndBoardingAlighting")]
+    partial class AddTrainStopsAndBoardingAlighting
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -109,6 +109,14 @@ namespace TrainService.Core.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AlightingStation")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("BoardingStation")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<DateTime>("BookedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -159,6 +167,33 @@ namespace TrainService.Core.Migrations
                     b.ToTable("Bookings", "trains");
                 });
 
+            modelBuilder.Entity("TrainService.Core.Models.TrainStop", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("StationName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("StopNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TrainId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrainId", "StopNumber")
+                        .IsUnique();
+
+                    b.ToTable("TrainStops", "trains");
+                });
+
             modelBuilder.Entity("TrainService.Core.Models.SeatAvailability", b =>
                 {
                     b.HasOne("TrainService.Core.Models.Train", "Train")
@@ -179,6 +214,22 @@ namespace TrainService.Core.Migrations
                         .IsRequired();
 
                     b.Navigation("Train");
+                });
+
+            modelBuilder.Entity("TrainService.Core.Models.TrainStop", b =>
+                {
+                    b.HasOne("TrainService.Core.Models.Train", "Train")
+                        .WithMany("Stops")
+                        .HasForeignKey("TrainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Train");
+                });
+
+            modelBuilder.Entity("TrainService.Core.Models.Train", b =>
+                {
+                    b.Navigation("Stops");
                 });
 #pragma warning restore 612, 618
         }

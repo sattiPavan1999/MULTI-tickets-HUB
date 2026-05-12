@@ -6,6 +6,7 @@ using TrainService.Core.Data;
 using TrainService.Core.Mapping;
 using TrainService.Core.Repositories;
 using TrainService.Core.Services;
+using TrainService.Core.Settings;
 using TrainService.Core.Validators;
 
 namespace TrainService.Core.Extensions;
@@ -14,11 +15,16 @@ public static class CoreServiceExtensions
 {
     public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        services.Configure<TrainCoreSettings>(configuration.GetSection("TrainSettings:Core"));
+
+        var settings = configuration.GetSection("TrainSettings:Core").Get<TrainCoreSettings>()
+            ?? throw new InvalidOperationException("TrainSettings:Core configuration section not found.");
 
         services.AddDbContext<TrainDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(
+                settings.Db.ConnectionString,
+                sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", settings.Db.DbSchema)
+            ));
 
         services.AddScoped<ITrainRepository, TrainRepository>();
         services.AddScoped<ISeatAvailabilityRepository, SeatAvailabilityRepository>();

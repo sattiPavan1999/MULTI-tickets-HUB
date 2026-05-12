@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace MovieService.Core.Migrations
+namespace MovieService.Core.Data.Migrations
 {
     /// <inheritdoc />
     public partial class AddBookingShowtimeIndex : Migration

@@ -1,28 +1,25 @@
 using IdentityService.Core.Models;
+using IdentityService.Core.Settings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace IdentityService.Core.Data;
 
-/// <summary>
-/// Database context for Identity Service
-/// </summary>
-public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
+public class IdentityDbContext(
+    DbContextOptions<IdentityDbContext> options,
+    IOptions<IdentityCoreSettings>? settings = null
+) : DbContext(options)
 {
-    /// <summary>
-    /// Users table
-    /// </summary>
-    public DbSet<User> Users { get; set; } = null!;
+    private readonly string _schema = settings?.Value.Db.DbSchema ?? "identity";
 
-    /// <summary>
-    /// Password reset tokens table
-    /// </summary>
+    public DbSet<User> Users { get; set; } = null!;
     public DbSet<PasswordResetToken> PasswordResetTokens { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.HasDefaultSchema("identity");
+        modelBuilder.HasDefaultSchema(_schema);
 
         modelBuilder.Entity<User>(entity =>
         {

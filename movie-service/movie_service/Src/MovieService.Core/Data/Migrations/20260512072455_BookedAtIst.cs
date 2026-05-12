@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace MovieService.Core.Migrations
+namespace MovieService.Core.Data.Migrations
 {
     /// <inheritdoc />
     public partial class BookedAtIst : Migration

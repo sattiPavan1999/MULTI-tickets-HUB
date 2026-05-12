@@ -9,11 +9,11 @@ using TrainService.Core.Data;
 
 #nullable disable
 
-namespace TrainService.Core.Migrations
+namespace TrainService.Core.Data.Migrations
 {
     [DbContext(typeof(TrainDbContext))]
-    [Migration("20260508091910_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260511075315_AddArrivalTimeAndPrice")]
+    partial class AddArrivalTimeAndPrice
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -59,6 +59,9 @@ namespace TrainService.Core.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("ArrivalTime")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -71,6 +74,9 @@ namespace TrainService.Core.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(10,2)");
 
                     b.Property<string>("Source")
                         .IsRequired()

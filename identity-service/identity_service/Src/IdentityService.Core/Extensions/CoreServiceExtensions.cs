@@ -4,6 +4,7 @@ using IdentityService.Core.DTOs;
 using IdentityService.Core.Mapping;
 using IdentityService.Core.Repositories;
 using IdentityService.Core.Services;
+using IdentityService.Core.Settings;
 using IdentityService.Core.Validators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -15,10 +16,16 @@ public static class CoreServiceExtensions
 {
     public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration config)
     {
-        var connectionString = config.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found");
+        services.Configure<IdentityCoreSettings>(config.GetSection("IdentitySettings:Core"));
 
-        services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(connectionString));
+        var settings = config.GetSection("IdentitySettings:Core").Get<IdentityCoreSettings>()
+            ?? throw new InvalidOperationException("IdentitySettings:Core configuration section not found.");
+
+        services.AddDbContext<IdentityDbContext>(options =>
+            options.UseNpgsql(
+                settings.Db.ConnectionString,
+                sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", settings.Db.DbSchema)
+            ));
 
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();

@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace MovieService.Core.Migrations
+namespace MovieService.Core.Data.Migrations
 {
     [DbContext(typeof(MovieDbContext))]
     [Migration("20260512072455_BookedAtIst")]
