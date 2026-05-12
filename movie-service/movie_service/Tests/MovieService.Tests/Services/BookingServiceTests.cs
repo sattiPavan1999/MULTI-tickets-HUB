@@ -128,7 +128,7 @@ public class BookingServiceTests
         var showtime = new Showtime
         {
             Movie = movie,
-            ShowDate = new DateOnly(2026, 1, 1),
+            ShowDate = new DateOnly(2027, 1, 1),
             ShowTime = new TimeOnly(10, 0),
             ScreenNumber = "S1",
             TotalSeats = 2,
@@ -172,5 +172,34 @@ public class BookingServiceTests
             UserId = 0,
             SeatNumbers = []
         })).Should().ThrowAsync<FluentValidation.ValidationException>();
+    }
+
+    [Fact]
+    public async Task CreateBooking_PastShowtime_ThrowsConflictException()
+    {
+        var db = new MovieDbContext(BuildOptions(nameof(CreateBooking_PastShowtime_ThrowsConflictException)));
+        var movie = new Movie { Title = "Old Film", Genre = "Drama", Duration = 120, PosterUrl = "https://example.com/p.jpg" };
+        db.Movies.Add(movie);
+        var pastShowtime = new Showtime
+        {
+            Movie = movie,
+            ShowDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-1)),
+            ShowTime = new TimeOnly(10, 0),
+            ScreenNumber = "S1",
+            TotalSeats = 50,
+            AvailableSeats = 50
+        };
+        db.Showtimes.Add(pastShowtime);
+        await db.SaveChangesAsync();
+
+        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, NullLogger<BookingService>.Instance);
+
+        await bookingSvc.Invoking(s => s.CreateBookingAsync(new CreateBookingInput
+        {
+            ShowtimeId = pastShowtime.Id,
+            UserId = 1,
+            SeatNumbers = [1]
+        })).Should().ThrowAsync<ConflictException>()
+            .WithMessage("*already started*");
     }
 }

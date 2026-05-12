@@ -113,7 +113,8 @@ public class MovieDbContext(DbContextOptions<MovieDbContext> options) : DbContex
 
             entity.Property(e => e.BookedAt)
                 .IsRequired()
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                .HasColumnType("timestamp without time zone")
+                .HasDefaultValueSql("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')");
 
             entity.HasIndex(e => e.ShowtimeId);
 

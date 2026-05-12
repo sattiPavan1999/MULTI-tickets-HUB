@@ -19,6 +19,7 @@ public class TrainBookingService(
     TrainDbContext dbContext,
     ILogger<TrainBookingService> logger) : ITrainBookingService
 {
+    private static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
     public async Task<TrainBookingResponse> CreateBookingAsync(CreateTrainBookingInput input)
     {
         await validator.ValidateAndThrowAsync(input);
@@ -57,7 +58,7 @@ public class TrainBookingService(
                     PNR = pnr,
                     Status = BookingStatus.Confirmed,
                     WaitlistPosition = null,
-                    BookedAt = DateTime.UtcNow
+                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist)
                 };
             }
             else if (seat.AvailableSeats == 0)
@@ -76,7 +77,7 @@ public class TrainBookingService(
                     PNR = pnr,
                     Status = BookingStatus.Waitlisted,
                     WaitlistPosition = waitlistCount + 1,
-                    BookedAt = DateTime.UtcNow
+                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist)
                 };
             }
             else

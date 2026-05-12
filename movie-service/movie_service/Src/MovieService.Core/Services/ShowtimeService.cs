@@ -16,10 +16,16 @@ public class ShowtimeService(
     IMapper mapper,
     ILogger<ShowtimeService> logger) : IShowtimeService
 {
+    private static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+
     public async Task<List<ShowtimeResponse>> GetShowtimesByMovieAsync(int movieId)
     {
+        var nowIst = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist);
         var showtimes = await showtimeRepository.GetByMovieIdAsync(movieId);
-        return mapper.Map<List<ShowtimeResponse>>(showtimes);
+        var upcoming = showtimes
+            .Where(s => s.ShowDate.ToDateTime(s.ShowTime) > nowIst)
+            .ToList();
+        return mapper.Map<List<ShowtimeResponse>>(upcoming);
     }
 
     public async Task<ShowtimeResponse> CreateShowtimeAsync(CreateShowtimeInput input)

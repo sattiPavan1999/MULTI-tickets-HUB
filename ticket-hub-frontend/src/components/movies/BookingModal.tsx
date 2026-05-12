@@ -57,6 +57,14 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
 
   const handleConfirm = async () => {
     if (!selectedShowtime || !user) return;
+
+    const showDateTime = new Date(`${selectedShowtime.showDate}T${selectedShowtime.showTime}`);
+    if (showDateTime <= new Date()) {
+      toast.error('Booking closed — this show has already started.');
+      setStep(1);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await movieApi.createBooking({
@@ -75,6 +83,10 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
 
   const bookedSet = useMemo(() => new Set(seatStatus?.bookedSeats ?? []), [seatStatus]);
   const selectedSeatsSet = useMemo(() => new Set(selectedSeats), [selectedSeats]);
+  const upcomingShowtimes = useMemo(
+    () => showtimes.filter(s => new Date(`${s.showDate}T${s.showTime}`) > new Date()),
+    [showtimes]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -95,11 +107,11 @@ export function BookingModal({ movie, onClose }: BookingModalProps) {
           <>
             {loadingShowtimes ? (
               <div className="flex justify-center py-8"><Spinner /></div>
-            ) : showtimes.length === 0 ? (
-              <p className="py-8 text-center text-white/40">No showtimes available for this movie.</p>
+            ) : upcomingShowtimes.length === 0 ? (
+              <p className="py-8 text-center text-white/40">No upcoming showtimes available for this movie.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {showtimes.map((s) => (
+                {upcomingShowtimes.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => handleSelectShowtime(s)}

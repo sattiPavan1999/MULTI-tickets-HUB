@@ -217,4 +217,31 @@ public class ShowtimeServiceTests
         await svc.Invoking(s => s.DeleteShowtimeAsync(9999))
             .Should().ThrowAsync<NotFoundException>();
     }
+
+    [Fact]
+    public async Task GetShowtimesByMovie_ExcludesPastShowtimes()
+    {
+        var (svc, db) = BuildFullService(nameof(GetShowtimesByMovie_ExcludesPastShowtimes));
+        var movie = await SeedMovieAsync(db);
+
+        // Directly insert a past showtime (bypassing service to avoid future-only constraint)
+        db.Showtimes.Add(new Showtime
+        {
+            MovieId = movie.Id,
+            ShowDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-1)),
+            ShowTime = new TimeOnly(10, 0),
+            ScreenNumber = "Screen 1",
+            TotalSeats = 50,
+            AvailableSeats = 50
+        });
+        await db.SaveChangesAsync();
+
+        // Create one future showtime via the service
+        await svc.CreateShowtimeAsync(ValidInput(movie.Id));
+
+        var result = await svc.GetShowtimesByMovieAsync(movie.Id);
+
+        result.Should().HaveCount(1);
+        result[0].ShowDate.Should().Be(new DateOnly(2026, 12, 25));
+    }
 }

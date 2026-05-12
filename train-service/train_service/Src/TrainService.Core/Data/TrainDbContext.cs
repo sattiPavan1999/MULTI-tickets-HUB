@@ -54,7 +54,9 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
             entity.Property(e => e.PNR).IsRequired().HasMaxLength(20);
             entity.HasIndex(e => e.PNR).IsUnique();
             entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Confirmed");
-            entity.Property(e => e.BookedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.BookedAt).IsRequired()
+                .HasColumnType("timestamp without time zone")
+                .HasDefaultValueSql("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')");
             entity.HasIndex(e => new { e.TrainId, e.TravelDate, e.Status });
             entity.HasOne(e => e.Train)
                 .WithMany()

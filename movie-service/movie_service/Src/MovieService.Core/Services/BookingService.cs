@@ -16,6 +16,7 @@ public class BookingService(
     MovieDbContext dbContext,
     ILogger<BookingService> logger) : IBookingService
 {
+    private static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
     public async Task<BookingResponse> CreateBookingAsync(CreateBookingInput input)
     {
         await validator.ValidateAndThrowAsync(input);
@@ -25,6 +26,9 @@ public class BookingService(
         {
             var showtime = await dbContext.Showtimes.FindAsync([input.ShowtimeId])
                 ?? throw new NotFoundException($"Showtime {input.ShowtimeId} not found");
+
+            if (TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist) >= showtime.ShowDate.ToDateTime(showtime.ShowTime))
+                throw new ConflictException("Booking is closed — this show has already started");
 
             var alreadyBooked = await dbContext.Bookings
                 .Where(b => b.ShowtimeId == input.ShowtimeId && !string.IsNullOrEmpty(b.SeatNumbers))
@@ -50,7 +54,7 @@ public class BookingService(
                 SeatNumbers = string.Join(",", input.SeatNumbers),
                 NumberOfSeats = input.SeatNumbers.Count,
                 Status = BookingStatus.Confirmed,
-                BookedAt = DateTime.UtcNow
+                BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist)
             };
 
             showtime.AvailableSeats -= input.SeatNumbers.Count;
