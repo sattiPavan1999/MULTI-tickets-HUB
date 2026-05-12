@@ -11,4 +11,5 @@ public class TrainResponse
     public DateTime ArrivalTime { get; set; }
     public decimal Price { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<TrainStopResponse> Stops { get; set; } = new();
 }

@@ -83,7 +83,11 @@ export function BookingDetailModal({ booking, onClose }: BookingDetailModalProps
                   <>
                     <Row label="Train" value={t.trainName} />
                     <Row label="Train No." value={t.trainNumber} />
-                    <Row label="Route" value={t.source && t.destination ? `${t.source} → ${t.destination}` : null} />
+                    <Row label="Route" value={
+                      t.boardingStation && t.alightingStation
+                        ? `${t.boardingStation} → ${t.alightingStation}`
+                        : t.source && t.destination ? `${t.source} → ${t.destination}` : null
+                    } />
                     <Row label="Departure" value={t.departureTime ? new Date(t.departureTime).toLocaleString() : null} />
                     <Row label="Travel Date" value={t.travelDate} />
                     <Row label="PNR" value={t.pnr} />

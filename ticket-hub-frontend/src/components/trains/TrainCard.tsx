@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { TrainDto } from '@/services/api/trainApi';
 
 interface TrainCardProps {
@@ -20,6 +21,7 @@ function isBookingClosed(departureIso: string): boolean {
 
 export function TrainCard({ train, onBook, canBook = true }: TrainCardProps) {
   const bookingClosed = isBookingClosed(train.departureTime);
+  const [stopsOpen, setStopsOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-ink-800 p-5 transition hover:border-white/20">
@@ -52,6 +54,29 @@ export function TrainCard({ train, onBook, canBook = true }: TrainCardProps) {
           <p className="mt-0.5 text-xs text-white/60">{train.destination}</p>
         </div>
       </div>
+
+      {train.stops && train.stops.length > 0 && (
+        <div>
+          <button
+            onClick={() => setStopsOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition"
+          >
+            <span>{stopsOpen ? '▲' : '▼'}</span>
+            <span>{stopsOpen ? 'Hide stops' : `${train.stops.length} stops`}</span>
+          </button>
+          {stopsOpen && (
+            <ol className="mt-2 flex flex-col gap-0.5 text-xs text-white/50">
+              {train.stops.map((stop) => (
+                <li key={stop.stopNumber} className="flex items-center gap-1.5">
+                  <span className="w-4 text-right text-white/20">{stop.stopNumber}</span>
+                  <span className="h-1 w-1 rounded-full bg-white/20 shrink-0" />
+                  <span>{stop.stationName}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
 
       {!canBook ? (
         <p className="w-full py-2 text-center text-xs text-white/30">View only — admins cannot book</p>

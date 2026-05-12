@@ -35,7 +35,14 @@ const train = {
   arrivalTime: '2026-12-02T06:00:00Z',
   price: 1200,
   createdAt: '2026-01-01T00:00:00Z',
+  stops: [
+    { stopNumber: 1, stationName: 'New Delhi' },
+    { stopNumber: 2, stationName: 'Kanpur' },
+    { stopNumber: 3, stationName: 'Howrah' },
+  ],
 };
+
+const trainNoStops = { ...train, stops: [] };
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -61,6 +68,20 @@ describe('TrainBookingModal', () => {
     expect(screen.getByText('Passenger details')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Full name')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Age')).toBeInTheDocument();
+  });
+
+  it('renders_BoardingAndAlightingDropdowns_WhenTrainHasStops', () => {
+    render(<TestRouter><TrainBookingModal train={train} onClose={() => {}} /></TestRouter>);
+    expect(screen.getByText('Boarding Station')).toBeInTheDocument();
+    expect(screen.getByText('Destination')).toBeInTheDocument();
+    const selects = screen.getAllByRole('combobox');
+    expect(selects.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('doesNotRender_BoardingDropdowns_WhenTrainHasNoStops', () => {
+    render(<TestRouter><TrainBookingModal train={trainNoStops} onClose={() => {}} /></TestRouter>);
+    expect(screen.queryByText('Boarding Station')).not.toBeInTheDocument();
+    expect(screen.queryByText('Alighting Station')).not.toBeInTheDocument();
   });
 
   it('checkAvailability_WithEnoughSeats_ShowsGreenMessage', async () => {
@@ -108,6 +129,21 @@ describe('TrainBookingModal', () => {
       expect(screen.getByText('Confirm Booking')).toBeInTheDocument()
     );
     expect(screen.getByText('Rajdhani Express (#12301)')).toBeInTheDocument();
+  });
+
+  it('step2_ShowsBoardingAlighting_InSummary', async () => {
+    render(<TestRouter><TrainBookingModal train={train} onClose={() => {}} /></TestRouter>);
+    fillStep1();
+    fireEvent.click(screen.getByRole('button', { name: /check availability/i }));
+
+    await waitFor(() => expect(screen.getAllByText(/continue/i).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText(/continue/i)[screen.getAllByText(/continue/i).length - 1]);
+
+    await waitFor(() => expect(screen.getByText('Confirm Booking')).toBeInTheDocument());
+    // Default values: first stop → last stop shown in "Your Journey" row
+    expect(screen.getByText('Your Journey')).toBeInTheDocument();
+    // "New Delhi → Howrah" appears in both Route and Your Journey rows
+    expect(screen.getAllByText('New Delhi → Howrah').length).toBeGreaterThanOrEqual(1);
   });
 
   it('confirmBooking_Confirmed_ShowsPNR', async () => {

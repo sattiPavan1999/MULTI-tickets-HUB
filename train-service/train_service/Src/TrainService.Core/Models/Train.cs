@@ -11,4 +11,5 @@ public class Train
     public DateTime ArrivalTime { get; set; }
     public decimal Price { get; set; }
     public DateTime CreatedAt { get; set; }
+    public ICollection<TrainStop> Stops { get; set; } = [];
 }

@@ -8,4 +8,6 @@ public class CreateTrainBookingInput
     public string PassengerName { get; set; } = string.Empty;
     public int PassengerAge { get; set; }
     public int NumberOfSeats { get; set; }
+    public string? BoardingStation { get; set; }
+    public string? AlightingStation { get; set; }
 }

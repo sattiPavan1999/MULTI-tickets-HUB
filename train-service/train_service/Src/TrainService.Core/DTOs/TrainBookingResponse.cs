@@ -19,4 +19,6 @@ public class TrainBookingResponse
     public string? Destination { get; set; }
     public DateTime? DepartureTime { get; set; }
     public DateTime? ArrivalTime { get; set; }
+    public string? BoardingStation { get; set; }
+    public string? AlightingStation { get; set; }
 }

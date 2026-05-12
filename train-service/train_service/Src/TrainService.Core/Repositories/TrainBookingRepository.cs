@@ -18,6 +18,7 @@ public class TrainBookingRepository(TrainDbContext context) : BaseRepository<Tra
     public async Task<List<TrainBooking>> GetByUserIdAsync(int userId)
         => await context.Bookings
             .Include(b => b.Train)
+                .ThenInclude(t => t.Stops.OrderBy(s => s.StopNumber))
             .Where(b => b.UserId == userId)
             .OrderByDescending(b => b.BookedAt)
             .ToListAsync();
@@ -25,5 +26,6 @@ public class TrainBookingRepository(TrainDbContext context) : BaseRepository<Tra
     public async Task<TrainBooking?> GetByIdWithDetailsAsync(int bookingId)
         => await context.Bookings
             .Include(b => b.Train)
+                .ThenInclude(t => t.Stops.OrderBy(s => s.StopNumber))
             .FirstOrDefaultAsync(b => b.Id == bookingId);
 }

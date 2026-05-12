@@ -1,5 +1,11 @@
 namespace AdminBFF.Core.DTOs;
 
+public class TrainStopDto
+{
+    public int StopNumber { get; set; }
+    public string StationName { get; set; } = string.Empty;
+}
+
 public class TrainDto
 {
     public int Id { get; set; }
@@ -11,4 +17,5 @@ public class TrainDto
     public DateTime ArrivalTime { get; set; }
     public decimal Price { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<TrainStopDto> Stops { get; set; } = new();
 }

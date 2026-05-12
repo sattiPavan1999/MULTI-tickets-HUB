@@ -1,5 +1,10 @@
 import { apiClient } from './client';
 
+export interface TrainStopDto {
+  stopNumber: number;
+  stationName: string;
+}
+
 export interface TrainDto {
   id: number;
   trainName: string;
@@ -10,6 +15,7 @@ export interface TrainDto {
   arrivalTime: string;
   price: number;
   createdAt: string;
+  stops: TrainStopDto[];
 }
 
 export interface TrainSeatAvailabilityDto {
@@ -26,6 +32,8 @@ export interface CreateTrainBookingInput {
   passengerName: string;
   passengerAge: number;
   numberOfSeats: number;
+  boardingStation?: string;
+  alightingStation?: string;
 }
 
 export interface TrainBookingResponse {
@@ -46,6 +54,8 @@ export interface TrainBookingResponse {
   destination: string | null;
   departureTime: string | null;
   arrivalTime: string | null;
+  boardingStation: string | null;
+  alightingStation: string | null;
 }
 
 export interface OperationResult {

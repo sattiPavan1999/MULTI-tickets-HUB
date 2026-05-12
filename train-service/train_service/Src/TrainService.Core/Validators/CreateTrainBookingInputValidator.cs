@@ -18,6 +18,11 @@ public class CreateTrainBookingInputValidator : AbstractValidator<CreateTrainBoo
             .InclusiveBetween(1, 120).WithMessage("PassengerAge must be between 1 and 120");
         RuleFor(x => x.NumberOfSeats)
             .InclusiveBetween(1, 6).WithMessage("NumberOfSeats must be between 1 and 6");
+        RuleFor(x => x)
+            .Must(x => x.BoardingStation == null || x.AlightingStation == null ||
+                       !string.Equals(x.BoardingStation, x.AlightingStation, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("Boarding and alighting station cannot be the same")
+            .When(x => x.BoardingStation != null && x.AlightingStation != null);
     }
 
     private static bool BeValidDateFormat(string date)

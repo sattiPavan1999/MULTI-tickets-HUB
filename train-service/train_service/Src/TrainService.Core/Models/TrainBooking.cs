@@ -14,4 +14,6 @@ public class TrainBooking
     public string Status { get; set; } = "Confirmed";
     public int? WaitlistPosition { get; set; }
     public DateTime BookedAt { get; set; }
+    public string? BoardingStation { get; set; }
+    public string? AlightingStation { get; set; }
 }

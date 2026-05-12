@@ -13,25 +13,57 @@ public class TrainRepository(TrainDbContext context, ILogger<TrainRepository> lo
         return await context.Trains.FirstOrDefaultAsync(t => t.TrainNumber == trainNumber);
     }
 
+    public async Task<Train?> GetByIdWithStopsAsync(int id)
+        => await context.Trains
+            .Include(t => t.Stops.OrderBy(s => s.StopNumber))
+            .FirstOrDefaultAsync(t => t.Id == id);
+
     public async Task<List<Train>> GetAllAsync()
     {
         logger.LogDebug("Fetching all trains");
-        return await context.Trains.ToListAsync();
+        return await context.Trains
+            .Include(t => t.Stops.OrderBy(s => s.StopNumber))
+            .ToListAsync();
     }
 
     public async Task<List<Train>> SearchByRouteAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false)
     {
         logger.LogDebug("Searching trains: source={Source}, destination={Destination}, sortBy={SortBy}, requiresAvailability={RequiresAvailability}", source, destination, sortBy, requiresAvailability);
-        var query = context.Trains.AsNoTracking().AsQueryable();
+
+        IQueryable<Train> query;
+
+        if (!string.IsNullOrWhiteSpace(source) && !string.IsNullOrWhiteSpace(destination))
+        {
+            var srcLower = source.ToLower();
+            var dstLower = destination.ToLower();
+            query = context.Trains.AsNoTracking()
+                .Where(t =>
+                    t.Stops.Any(s => s.StationName.ToLower().Contains(srcLower)) &&
+                    t.Stops.Any(s => s.StationName.ToLower().Contains(dstLower)) &&
+                    t.Stops.Where(s => s.StationName.ToLower().Contains(srcLower)).Min(s => s.StopNumber) <
+                    t.Stops.Where(s => s.StationName.ToLower().Contains(dstLower)).Max(s => s.StopNumber));
+        }
+        else if (!string.IsNullOrWhiteSpace(source))
+        {
+            var srcLower = source.ToLower();
+            query = context.Trains.AsNoTracking()
+                .Where(t => t.Stops.Any(s => s.StationName.ToLower().Contains(srcLower)));
+        }
+        else if (!string.IsNullOrWhiteSpace(destination))
+        {
+            var dstLower = destination.ToLower();
+            query = context.Trains.AsNoTracking()
+                .Where(t => t.Stops.Any(s => s.StationName.ToLower().Contains(dstLower)));
+        }
+        else
+        {
+            query = context.Trains.AsNoTracking();
+        }
 
         if (requiresAvailability)
             query = query.Where(t => context.SeatAvailabilities.Any(s => s.TrainId == t.Id));
 
-        if (!string.IsNullOrWhiteSpace(source))
-            query = query.Where(t => t.Source.ToLower().Contains(source.ToLower()));
-
-        if (!string.IsNullOrWhiteSpace(destination))
-            query = query.Where(t => t.Destination.ToLower().Contains(destination.ToLower()));
+        query = query.Include(t => t.Stops.OrderBy(s => s.StopNumber));
 
         query = sortBy switch
         {

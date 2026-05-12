@@ -13,15 +13,6 @@ interface TrainBookingModalProps {
   onClose: () => void;
 }
 
-const step1Schema = z.object({
-  travelDate: z.string().min(1, 'Travel date is required'),
-  passengerName: z.string().min(1, 'Passenger name is required').max(255),
-  passengerAge: z.number().int().min(1, 'Age must be at least 1').max(120, 'Age must be at most 120'),
-  numberOfSeats: z.number().int().min(1, 'Min 1 seat').max(6, 'Max 6 seats'),
-});
-
-type Step1Data = z.infer<typeof step1Schema>;
-
 type AvailabilityState =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -34,6 +25,23 @@ export function TrainBookingModal({ train, onClose }: TrainBookingModalProps) {
   const { user } = useAuth();
   const toast = useToast();
 
+  const hasStops = train.stops && train.stops.length > 0;
+
+  const step1Schema = z.object({
+    travelDate: z.string().min(1, 'Travel date is required'),
+    passengerName: z.string().min(1, 'Passenger name is required').max(255),
+    passengerAge: z.number().int().min(1, 'Age must be at least 1').max(120, 'Age must be at most 120'),
+    numberOfSeats: z.number().int().min(1, 'Min 1 seat').max(6, 'Max 6 seats'),
+    boardingStation: hasStops ? z.string().min(1, 'Boarding station is required') : z.string().optional(),
+    alightingStation: hasStops ? z.string().min(1, 'Alighting station is required') : z.string().optional(),
+  }).refine(
+    (data) => !data.boardingStation || !data.alightingStation ||
+              data.boardingStation !== data.alightingStation,
+    { message: 'Boarding and alighting station cannot be the same', path: ['alightingStation'] }
+  );
+
+  type Step1Data = z.infer<typeof step1Schema>;
+
   const [step, setStep] = useState<1 | 2>(1);
   const [availability, setAvailability] = useState<AvailabilityState>({ kind: 'idle' });
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
@@ -44,7 +52,11 @@ export function TrainBookingModal({ train, onClose }: TrainBookingModalProps) {
 
   const { register, handleSubmit, formState: { errors } } = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
-    defaultValues: { numberOfSeats: 1 },
+    defaultValues: {
+      numberOfSeats: 1,
+      boardingStation: hasStops ? train.stops[0].stationName : '',
+      alightingStation: hasStops ? train.stops[train.stops.length - 1].stationName : '',
+    },
   });
 
   const isBookingClosed = Date.now() >= new Date(train.departureTime).getTime() - 60 * 60 * 1000;
@@ -91,6 +103,8 @@ export function TrainBookingModal({ train, onClose }: TrainBookingModalProps) {
         passengerName: step1Data.passengerName,
         passengerAge: step1Data.passengerAge,
         numberOfSeats: step1Data.numberOfSeats,
+        boardingStation: step1Data.boardingStation || undefined,
+        alightingStation: step1Data.alightingStation || undefined,
       });
       setBookingResult(result);
       if (result.status === 'Confirmed') {
@@ -151,6 +165,40 @@ export function TrainBookingModal({ train, onClose }: TrainBookingModalProps) {
               />
               {errors.passengerName && <p className="mt-1 text-xs text-red-400">{errors.passengerName.message}</p>}
             </div>
+
+            {hasStops && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-xs text-white/60">Boarding Station</label>
+                  <select
+                    {...register('boardingStation')}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white outline-none focus:border-teal-400/50"
+                  >
+                    {train.stops.map((s) => (
+                      <option key={s.stopNumber} value={s.stationName} className="bg-gray-900">
+                        {s.stationName}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.boardingStation && <p className="mt-1 text-xs text-red-400">{errors.boardingStation.message}</p>}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs text-white/60">Destination</label>
+                  <select
+                    {...register('alightingStation')}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white outline-none focus:border-teal-400/50"
+                  >
+                    {train.stops.map((s) => (
+                      <option key={s.stopNumber} value={s.stationName} className="bg-gray-900">
+                        {s.stationName}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.alightingStation && <p className="mt-1 text-xs text-red-400">{errors.alightingStation.message}</p>}
+                </div>
+              </>
+            )}
 
             <div className="flex gap-3">
               <div className="flex-1">
@@ -222,6 +270,9 @@ export function TrainBookingModal({ train, onClose }: TrainBookingModalProps) {
             <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-2">
               <Row label="Train" value={`${train.trainName} (#${train.trainNumber})`} />
               <Row label="Route" value={`${train.source} → ${train.destination}`} />
+              {step1Data.boardingStation && step1Data.alightingStation && (
+                <Row label="Your Journey" value={`${step1Data.boardingStation} → ${step1Data.alightingStation}`} />
+              )}
               <Row label="Travel Date" value={step1Data.travelDate} />
               <Row label="Passenger" value={step1Data.passengerName} />
               <Row label="Age" value={String(step1Data.passengerAge)} />

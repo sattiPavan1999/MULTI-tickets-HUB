@@ -26,6 +26,10 @@ export const GET_ADMIN_TRAINS = gql`
       arrivalTime
       price
       createdAt
+      stops {
+        stopNumber
+        stationName
+      }
     }
   }
 `;

@@ -46,7 +46,9 @@ function toTrainUnified(b: TrainBookingResponse): UnifiedBooking {
     type: 'train',
     id: b.id,
     title: b.trainName ?? 'Train Booking',
-    subtitle: b.source && b.destination ? `${b.source} → ${b.destination}` : b.trainNumber ?? '—',
+    subtitle: b.boardingStation && b.alightingStation
+      ? `${b.boardingStation} → ${b.alightingStation}`
+      : b.source && b.destination ? `${b.source} → ${b.destination}` : b.trainNumber ?? '—',
     date: b.travelDate,
     status: computeStatus(b.status, eventStr),
     bookedAt: b.bookedAt,

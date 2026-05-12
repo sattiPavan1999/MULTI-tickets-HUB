@@ -160,9 +160,15 @@ public class TrainServiceTests
     [Fact]
     public async Task SearchTrains_FilterBySource_ReturnsMatching()
     {
-        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterBySource_ReturnsMatching));
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "SA1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "SB1", Source = "Mumbai CST", Destination = "Pune", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(4), Price = 500m });
+        var (svc, db) = BuildFullService(nameof(SearchTrains_FilterBySource_ReturnsMatching));
+        var a = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "SA1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        var b = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "SB1", Source = "Mumbai CST", Destination = "Pune", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(4), Price = 500m });
+        db.TrainStops.AddRange(
+            new TrainStop { TrainId = a.Id, StopNumber = 1, StationName = "New Delhi" },
+            new TrainStop { TrainId = a.Id, StopNumber = 2, StationName = "Howrah" },
+            new TrainStop { TrainId = b.Id, StopNumber = 1, StationName = "Mumbai CST" },
+            new TrainStop { TrainId = b.Id, StopNumber = 2, StationName = "Pune" });
+        await db.SaveChangesAsync();
 
         var result = await svc.SearchTrainsAsync("New Delhi", null, null);
 
@@ -173,9 +179,15 @@ public class TrainServiceTests
     [Fact]
     public async Task SearchTrains_FilterByDestination_ReturnsMatching()
     {
-        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterByDestination_ReturnsMatching));
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "DA1", Source = "Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "DB1", Source = "Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
+        var (svc, db) = BuildFullService(nameof(SearchTrains_FilterByDestination_ReturnsMatching));
+        var a = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "DA1", Source = "Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        var b = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "DB1", Source = "Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
+        db.TrainStops.AddRange(
+            new TrainStop { TrainId = a.Id, StopNumber = 1, StationName = "Delhi" },
+            new TrainStop { TrainId = a.Id, StopNumber = 2, StationName = "Howrah" },
+            new TrainStop { TrainId = b.Id, StopNumber = 1, StationName = "Delhi" },
+            new TrainStop { TrainId = b.Id, StopNumber = 2, StationName = "Bhopal" });
+        await db.SaveChangesAsync();
 
         var result = await svc.SearchTrainsAsync(null, "Howrah", null);
 
@@ -186,10 +198,18 @@ public class TrainServiceTests
     [Fact]
     public async Task SearchTrains_FilterBothSourceAndDestination_ReturnsExactMatch()
     {
-        var (svc, _) = BuildFullService(nameof(SearchTrains_FilterBothSourceAndDestination_ReturnsExactMatch));
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "BD1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "BD2", Source = "New Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
-        await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express C", TrainNumber = "BD3", Source = "Mumbai CST", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(2), ArrivalTime = DateTime.UtcNow.AddDays(3), Price = 1200m });
+        var (svc, db) = BuildFullService(nameof(SearchTrains_FilterBothSourceAndDestination_ReturnsExactMatch));
+        var a = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express A", TrainNumber = "BD1", Source = "New Delhi", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(2), Price = 1000m });
+        var b = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express B", TrainNumber = "BD2", Source = "New Delhi", Destination = "Bhopal", DepartureTime = DateTime.UtcNow.AddDays(1), ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(6), Price = 600m });
+        var c = await svc.CreateTrainAsync(new CreateTrainInput { TrainName = "Express C", TrainNumber = "BD3", Source = "Mumbai CST", Destination = "Howrah", DepartureTime = DateTime.UtcNow.AddDays(2), ArrivalTime = DateTime.UtcNow.AddDays(3), Price = 1200m });
+        db.TrainStops.AddRange(
+            new TrainStop { TrainId = a.Id, StopNumber = 1, StationName = "New Delhi" },
+            new TrainStop { TrainId = a.Id, StopNumber = 2, StationName = "Howrah" },
+            new TrainStop { TrainId = b.Id, StopNumber = 1, StationName = "New Delhi" },
+            new TrainStop { TrainId = b.Id, StopNumber = 2, StationName = "Bhopal" },
+            new TrainStop { TrainId = c.Id, StopNumber = 1, StationName = "Mumbai CST" },
+            new TrainStop { TrainId = c.Id, StopNumber = 2, StationName = "Howrah" });
+        await db.SaveChangesAsync();
 
         var result = await svc.SearchTrainsAsync("New Delhi", "Howrah", null);
 

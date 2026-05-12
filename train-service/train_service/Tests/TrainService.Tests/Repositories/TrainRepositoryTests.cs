@@ -21,6 +21,7 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         _db = new TrainDbContext(options);
         _repo = new TrainRepository(_db, NullLogger<TrainRepository>.Instance);
         await _db.SeatAvailabilities.ExecuteDeleteAsync();
+        await _db.TrainStops.ExecuteDeleteAsync();
         await _db.Trains.ExecuteDeleteAsync();
     }
 
@@ -36,6 +37,9 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         ArrivalTime = DateTime.UtcNow.AddDays(1).AddHours(10),
         Price = 500m
     };
+
+    private static List<TrainStop> MakeStops(int trainId, IEnumerable<string> stations)
+        => stations.Select((name, i) => new TrainStop { TrainId = trainId, StopNumber = i + 1, StationName = name }).ToList();
 
     [Fact]
     public async Task AddAsync_PersistsAndReturnsTrain()
@@ -117,5 +121,71 @@ public class TrainRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         var count = _repo.Query().Count();
 
         count.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetByIdWithStopsAsync_IncludesOrderedStops()
+    {
+        var train = await _repo.AddAsync(MakeTrain());
+        _db.TrainStops.AddRange(MakeStops(train.Id, ["Vizag", "Vijayawada", "Secunderabad"]));
+        await _db.SaveChangesAsync();
+
+        var found = await _repo.GetByIdWithStopsAsync(train.Id);
+
+        found.Should().NotBeNull();
+        found!.Stops.Should().HaveCount(3);
+        found.Stops.Select(s => s.StopNumber).Should().BeInAscendingOrder();
+        found.Stops.First().StationName.Should().Be("Vizag");
+    }
+
+    [Fact]
+    public async Task SearchByRoute_FindsTrainByIntermediateStop()
+    {
+        var train = await _repo.AddAsync(MakeTrain());
+        _db.TrainStops.AddRange(MakeStops(train.Id, ["Vizag", "Vijayawada", "Warangal", "Secunderabad"]));
+        _db.SeatAvailabilities.Add(new SeatAvailability { TrainId = train.Id, Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = 100 });
+        await _db.SaveChangesAsync();
+
+        var results = await _repo.SearchByRouteAsync("Vijayawada", "Secunderabad", null, requiresAvailability: true);
+
+        results.Should().HaveCount(1);
+        results[0].Id.Should().Be(train.Id);
+    }
+
+    [Fact]
+    public async Task SearchByRoute_RespectsDirection_ExcludesReverseTrains()
+    {
+        // Train goes Vizag → Secunderabad
+        var trainA = await _repo.AddAsync(MakeTrain());
+        _db.TrainStops.AddRange(MakeStops(trainA.Id, ["Vizag", "Vijayawada", "Secunderabad"]));
+        _db.SeatAvailabilities.Add(new SeatAvailability { TrainId = trainA.Id, Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = 100 });
+        await _db.SaveChangesAsync();
+
+        // Search Secunderabad → Vizag — should NOT match trainA since Secunderabad (stop 3) > Vizag (stop 1)
+        var results = await _repo.SearchByRouteAsync("Secunderabad", "Vizag", null, requiresAvailability: true);
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchByRoute_BothDirections_OnlyReturnsCorrectTrain()
+    {
+        // Train A: Vizag → Secunderabad
+        var trainA = await _repo.AddAsync(MakeTrain());
+        _db.TrainStops.AddRange(MakeStops(trainA.Id, ["Vizag", "Vijayawada", "Secunderabad"]));
+        _db.SeatAvailabilities.Add(new SeatAvailability { TrainId = trainA.Id, Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = 100 });
+
+        // Train B: Secunderabad → Vizag
+        var trainB = await _repo.AddAsync(MakeTrain());
+        _db.TrainStops.AddRange(MakeStops(trainB.Id, ["Secunderabad", "Vijayawada", "Vizag"]));
+        _db.SeatAvailabilities.Add(new SeatAvailability { TrainId = trainB.Id, Date = DateOnly.FromDateTime(DateTime.UtcNow), AvailableSeats = 100 });
+
+        await _db.SaveChangesAsync();
+
+        var vizagToSec = await _repo.SearchByRouteAsync("Vizag", "Secunderabad", null, requiresAvailability: true);
+        var secToVizag = await _repo.SearchByRouteAsync("Secunderabad", "Vizag", null, requiresAvailability: true);
+
+        vizagToSec.Should().HaveCount(1).And.Contain(t => t.Id == trainA.Id);
+        secToVizag.Should().HaveCount(1).And.Contain(t => t.Id == trainB.Id);
     }
 }

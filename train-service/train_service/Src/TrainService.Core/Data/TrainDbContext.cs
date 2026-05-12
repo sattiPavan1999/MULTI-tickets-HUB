@@ -6,6 +6,7 @@ namespace TrainService.Core.Data;
 public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContext(options)
 {
     public DbSet<Train> Trains { get; set; } = null!;
+    public DbSet<TrainStop> TrainStops { get; set; } = null!;
     public DbSet<SeatAvailability> SeatAvailabilities { get; set; } = null!;
     public DbSet<TrainBooking> Bookings { get; set; } = null!;
 
@@ -29,6 +30,20 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
             entity.Property(e => e.ArrivalTime).IsRequired();
             entity.Property(e => e.Price).IsRequired().HasColumnType("decimal(10,2)");
             entity.Property(e => e.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<TrainStop>(entity =>
+        {
+            entity.ToTable("TrainStops");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.StopNumber).IsRequired();
+            entity.Property(e => e.StationName).IsRequired().HasMaxLength(255);
+            entity.HasOne(e => e.Train)
+                .WithMany(t => t.Stops)
+                .HasForeignKey(e => e.TrainId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.TrainId, e.StopNumber }).IsUnique();
         });
 
         modelBuilder.Entity<SeatAvailability>(entity =>
@@ -57,6 +72,8 @@ public class TrainDbContext(DbContextOptions<TrainDbContext> options) : DbContex
             entity.Property(e => e.BookedAt).IsRequired()
                 .HasColumnType("timestamp without time zone")
                 .HasDefaultValueSql("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')");
+            entity.Property(e => e.BoardingStation).HasMaxLength(255);
+            entity.Property(e => e.AlightingStation).HasMaxLength(255);
             entity.HasIndex(e => new { e.TrainId, e.TravelDate, e.Status });
             entity.HasOne(e => e.Train)
                 .WithMany()

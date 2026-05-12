@@ -48,12 +48,22 @@ public class TrainBookingServiceTests
         db.SaveChanges();
 
         var svc = new TrainBookingService(
-            bookingRepo, seatRepo,
+            bookingRepo, seatRepo, trainRepo,
             new CreateTrainBookingInputValidator(),
             BuildMapper(), db,
             NullLogger<TrainBookingService>.Instance);
 
         return (svc, db, train);
+    }
+
+    private static void AddStops(TrainDbContext db, Train train)
+    {
+        db.TrainStops.AddRange(
+            new TrainStop { TrainId = train.Id, StopNumber = 1, StationName = "City A" },
+            new TrainStop { TrainId = train.Id, StopNumber = 2, StationName = "City M" },
+            new TrainStop { TrainId = train.Id, StopNumber = 3, StationName = "City B" }
+        );
+        db.SaveChanges();
     }
 
     private static CreateTrainBookingInput ValidInput(int trainId) => new()
@@ -159,7 +169,6 @@ public class TrainBookingServiceTests
         var seatRepo = new SeatAvailabilityRepository(db);
         var bookingRepo = new TrainBookingRepository(db);
 
-        // Train departs in 30 minutes
         var soonTrain = new Train
         {
             TrainName = "Soon Express",
@@ -175,7 +184,7 @@ public class TrainBookingServiceTests
         db.SeatAvailabilities.Add(new SeatAvailability { TrainId = soonTrain.Id, Date = today, AvailableSeats = 10 });
         db.SaveChanges();
 
-        var svc = new TrainBookingService(bookingRepo, seatRepo,
+        var svc = new TrainBookingService(bookingRepo, seatRepo, trainRepo,
             new CreateTrainBookingInputValidator(), BuildMapper(), db,
             NullLogger<TrainBookingService>.Instance);
 
@@ -200,6 +209,77 @@ public class TrainBookingServiceTests
         var r2 = await svc.CreateBookingAsync(ValidInput(train.Id));
 
         r1.PNR.Should().NotBe(r2.PNR);
+    }
+
+    [Fact]
+    public async Task CreateBooking_ValidBoardingAlighting_StoresStations()
+    {
+        var (svc, db, train) = BuildFullService(nameof(CreateBooking_ValidBoardingAlighting_StoresStations));
+        AddStops(db, train);
+
+        var input = ValidInput(train.Id);
+        input.BoardingStation = "City A";
+        input.AlightingStation = "City M";
+
+        var result = await svc.CreateBookingAsync(input);
+
+        result.Status.Should().Be("Confirmed");
+        result.BoardingStation.Should().Be("City A");
+        result.AlightingStation.Should().Be("City M");
+    }
+
+    [Fact]
+    public async Task CreateBooking_InvalidBoardingStation_ThrowsNotFoundException()
+    {
+        var (svc, db, train) = BuildFullService(nameof(CreateBooking_InvalidBoardingStation_ThrowsNotFoundException));
+        AddStops(db, train);
+
+        var input = ValidInput(train.Id);
+        input.BoardingStation = "Nonexistent Station";
+
+        await svc.Invoking(s => s.CreateBookingAsync(input))
+            .Should().ThrowAsync<NotFoundException>().WithMessage("*Boarding station*");
+    }
+
+    [Fact]
+    public async Task CreateBooking_InvalidAlightingStation_ThrowsNotFoundException()
+    {
+        var (svc, db, train) = BuildFullService(nameof(CreateBooking_InvalidAlightingStation_ThrowsNotFoundException));
+        AddStops(db, train);
+
+        var input = ValidInput(train.Id);
+        input.AlightingStation = "Ghost Station";
+
+        await svc.Invoking(s => s.CreateBookingAsync(input))
+            .Should().ThrowAsync<NotFoundException>().WithMessage("*Alighting station*");
+    }
+
+    [Fact]
+    public async Task CreateBooking_BoardingAfterAlighting_ThrowsConflictException()
+    {
+        var (svc, db, train) = BuildFullService(nameof(CreateBooking_BoardingAfterAlighting_ThrowsConflictException));
+        AddStops(db, train);
+
+        var input = ValidInput(train.Id);
+        input.BoardingStation = "City B";   // stop 3
+        input.AlightingStation = "City A";  // stop 1
+
+        await svc.Invoking(s => s.CreateBookingAsync(input))
+            .Should().ThrowAsync<ConflictException>().WithMessage("*Boarding station must come before*");
+    }
+
+    [Fact]
+    public async Task CreateBooking_SameBoardingAndAlighting_ThrowsValidationException()
+    {
+        var (svc, db, train) = BuildFullService(nameof(CreateBooking_SameBoardingAndAlighting_ThrowsValidationException));
+        AddStops(db, train);
+
+        var input = ValidInput(train.Id);
+        input.BoardingStation = "City A";
+        input.AlightingStation = "city a"; // case-insensitive match
+
+        await svc.Invoking(s => s.CreateBookingAsync(input))
+            .Should().ThrowAsync<FluentValidation.ValidationException>();
     }
 
     [Fact]
@@ -330,6 +410,7 @@ public class TrainBookingServiceTests
         var db = new TrainDbContext(options);
         var seatRepo = new SeatAvailabilityRepository(db);
         var bookingRepo = new TrainBookingRepository(db);
+        var trainRepo = new TrainRepository(db, NullLogger<TrainRepository>.Instance);
 
         var imminent = new Train
         {
@@ -349,7 +430,7 @@ public class TrainBookingServiceTests
         db.SaveChanges();
 
         var svc = new TrainBookingService(
-            bookingRepo, seatRepo,
+            bookingRepo, seatRepo, trainRepo,
             new CreateTrainBookingInputValidator(),
             BuildMapper(), db,
             NullLogger<TrainBookingService>.Instance);

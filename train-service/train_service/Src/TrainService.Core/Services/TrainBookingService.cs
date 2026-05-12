@@ -14,12 +14,14 @@ namespace TrainService.Core.Services;
 public class TrainBookingService(
     ITrainBookingRepository bookingRepository,
     ISeatAvailabilityRepository seatRepository,
+    ITrainRepository trainRepository,
     IValidator<CreateTrainBookingInput> validator,
     IMapper mapper,
     TrainDbContext dbContext,
     ILogger<TrainBookingService> logger) : ITrainBookingService
 {
     private static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+
     public async Task<TrainBookingResponse> CreateBookingAsync(CreateTrainBookingInput input)
     {
         await validator.ValidateAndThrowAsync(input);
@@ -29,11 +31,35 @@ public class TrainBookingService(
         await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         try
         {
-            var train = await dbContext.Trains.FindAsync([input.TrainId])
+            var train = await trainRepository.GetByIdWithStopsAsync(input.TrainId)
                 ?? throw new NotFoundException($"Train {input.TrainId} not found.");
 
             if (DateTime.UtcNow >= train.DepartureTime.AddHours(-1))
                 throw new ConflictException("Booking is closed. Train departs within 1 hour or has already departed.");
+
+            if (train.Stops.Count > 0)
+            {
+                var stationNames = train.Stops.Select(s => s.StationName).ToList();
+
+                if (input.BoardingStation is not null &&
+                    !stationNames.Any(n => n.Equals(input.BoardingStation, StringComparison.OrdinalIgnoreCase)))
+                    throw new NotFoundException($"Boarding station '{input.BoardingStation}' is not a stop on this train.");
+
+                if (input.AlightingStation is not null &&
+                    !stationNames.Any(n => n.Equals(input.AlightingStation, StringComparison.OrdinalIgnoreCase)))
+                    throw new NotFoundException($"Alighting station '{input.AlightingStation}' is not a stop on this train.");
+
+                if (input.BoardingStation is not null && input.AlightingStation is not null)
+                {
+                    var boardingStop = train.Stops.First(s =>
+                        s.StationName.Equals(input.BoardingStation, StringComparison.OrdinalIgnoreCase));
+                    var alightingStop = train.Stops.First(s =>
+                        s.StationName.Equals(input.AlightingStation, StringComparison.OrdinalIgnoreCase));
+
+                    if (boardingStop.StopNumber >= alightingStop.StopNumber)
+                        throw new ConflictException("Boarding station must come before alighting station on the train route.");
+                }
+            }
 
             var seat = await seatRepository.GetByTrainAndDateAsync(input.TrainId, travelDate)
                 ?? throw new NotFoundException($"No seat availability found for train {input.TrainId} on {input.TravelDate}. Please select a date configured by the admin.");
@@ -58,7 +84,9 @@ public class TrainBookingService(
                     PNR = pnr,
                     Status = BookingStatus.Confirmed,
                     WaitlistPosition = null,
-                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist)
+                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist),
+                    BoardingStation = input.BoardingStation,
+                    AlightingStation = input.AlightingStation,
                 };
             }
             else if (seat.AvailableSeats == 0)
@@ -77,7 +105,9 @@ public class TrainBookingService(
                     PNR = pnr,
                     Status = BookingStatus.Waitlisted,
                     WaitlistPosition = waitlistCount + 1,
-                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist)
+                    BookedAt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist),
+                    BoardingStation = input.BoardingStation,
+                    AlightingStation = input.AlightingStation,
                 };
             }
             else
@@ -151,8 +181,6 @@ public class TrainBookingService(
                     seat.AvailableSeats += booking.NumberOfSeats;
                     dbContext.SeatAvailabilities.Update(seat);
                 }
-                // PromoteWaitlistAsync flushes all pending changes (cancellation + seat free + promotion)
-                // in a single SaveChangesAsync call
                 await PromoteWaitlistAsync(booking.TrainId, booking.TravelDate);
             }
             else

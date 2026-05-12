@@ -5,6 +5,7 @@ namespace TrainService.Core.Repositories;
 public interface ITrainRepository : IBaseRepository<Train>
 {
     Task<Train?> GetByTrainNumberAsync(string trainNumber);
+    Task<Train?> GetByIdWithStopsAsync(int id);
     Task<List<Train>> GetAllAsync();
     Task<List<Train>> SearchByRouteAsync(string? source, string? destination, string? sortBy, bool requiresAvailability = false);
 }
