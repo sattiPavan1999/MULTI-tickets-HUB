@@ -26,6 +26,7 @@ const ShieldIcon = () => (
   </svg>
 );
 
+
 export function DashboardPage() {
   const { user } = useAuth();
   const firstName = user?.fullName?.split(' ')[0] ?? 'there';

@@ -104,16 +104,39 @@ public class TrainBookingService(
         }
     }
 
-    public async Task<OperationResult> CancelBookingAsync(int bookingId)
+    public async Task<List<TrainBookingResponse>> GetMyBookingsAsync(int userId)
+    {
+        var bookings = await bookingRepository.GetByUserIdAsync(userId);
+        return mapper.Map<List<TrainBookingResponse>>(bookings);
+    }
+
+    public async Task<TrainBookingResponse> GetBookingByIdAsync(int bookingId, int userId)
+    {
+        var booking = await bookingRepository.GetByIdWithDetailsAsync(bookingId)
+            ?? throw new NotFoundException($"Booking {bookingId} not found");
+
+        if (booking.UserId != userId)
+            throw new UnauthorizedAccessException("You are not authorized to view this booking");
+
+        return mapper.Map<TrainBookingResponse>(booking);
+    }
+
+    public async Task<OperationResult> CancelBookingAsync(int bookingId, int userId)
     {
         await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         try
         {
-            var booking = await bookingRepository.GetByIdAsync(bookingId)
+            var booking = await bookingRepository.GetByIdWithDetailsAsync(bookingId)
                 ?? throw new NotFoundException($"Booking {bookingId} not found");
+
+            if (booking.UserId != userId)
+                throw new UnauthorizedAccessException("You are not authorized to cancel this booking");
 
             if (booking.Status == BookingStatus.Cancelled)
                 throw new ConflictException("Booking is already cancelled");
+
+            if (DateTime.UtcNow >= booking.Train.DepartureTime.AddHours(-2))
+                throw new ConflictException("Cancellation is not allowed within 2 hours of departure");
 
             var wasConfirmed = booking.Status == BookingStatus.Confirmed;
             booking.Status = BookingStatus.Cancelled;
@@ -143,7 +166,7 @@ public class TrainBookingService(
 
             await tx.CommitAsync();
 
-            logger.LogInformation("Booking {BookingId} cancelled (PNR={PNR})", bookingId, booking.PNR);
+            logger.LogInformation("Booking {BookingId} cancelled (PNR={PNR}) by user {UserId}", bookingId, booking.PNR, userId);
             return new OperationResult { Success = true, Message = "Booking cancelled successfully" };
         }
         catch

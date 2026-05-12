@@ -37,6 +37,12 @@ export function DashboardHeader() {
           </span>
         </Link>
         <div className="flex items-center gap-3 sm:gap-4">
+          <Link
+            to="/my-bookings"
+            className="hidden text-sm font-medium text-white/60 transition-colors hover:text-white sm:block"
+          >
+            My Bookings
+          </Link>
           <button
             type="button"
             onClick={() => navigate('/profile')}

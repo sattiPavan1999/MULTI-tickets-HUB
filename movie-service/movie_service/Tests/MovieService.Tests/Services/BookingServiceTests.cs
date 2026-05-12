@@ -46,6 +46,7 @@ public class BookingServiceTests
             new CreateBookingInputValidator(),
             mapper,
             db,
+            bookingRepo,
             NullLogger<BookingService>.Instance);
 
         return (bookingSvc, showtimeSvc, db);
@@ -137,7 +138,7 @@ public class BookingServiceTests
         db.Showtimes.Add(showtime);
         await db.SaveChangesAsync();
 
-        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, NullLogger<BookingService>.Instance);
+        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, new BookingRepository(db), NullLogger<BookingService>.Instance);
 
         await bookingSvc.Invoking(s => s.CreateBookingAsync(new CreateBookingInput
         {
@@ -192,7 +193,7 @@ public class BookingServiceTests
         db.Showtimes.Add(pastShowtime);
         await db.SaveChangesAsync();
 
-        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, NullLogger<BookingService>.Instance);
+        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, new BookingRepository(db), NullLogger<BookingService>.Instance);
 
         await bookingSvc.Invoking(s => s.CreateBookingAsync(new CreateBookingInput
         {
@@ -201,5 +202,142 @@ public class BookingServiceTests
             SeatNumbers = [1]
         })).Should().ThrowAsync<ConflictException>()
             .WithMessage("*already started*");
+    }
+
+    [Fact]
+    public async Task GetMyBookings_ReturnsAllUserBookingsOrderedDesc()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(GetMyBookings_ReturnsAllUserBookingsOrderedDesc));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+
+        await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1] });
+        await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [2] });
+        await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 2, SeatNumbers = [3] });
+
+        var results = await bookingSvc.GetMyBookingsAsync(1);
+
+        results.Should().HaveCount(2);
+        results.Should().BeInDescendingOrder(b => b.BookedAt);
+    }
+
+    [Fact]
+    public async Task GetMyBookings_ReturnsEmpty_WhenNoBookings()
+    {
+        var (bookingSvc, _, _) = BuildFullService(nameof(GetMyBookings_ReturnsEmpty_WhenNoBookings));
+
+        var results = await bookingSvc.GetMyBookingsAsync(999);
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetBookingById_ReturnsEnrichedBooking()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(GetBookingById_ReturnsEnrichedBooking));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+        var created = await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1] });
+
+        var result = await bookingSvc.GetBookingByIdAsync(created.Id, 1);
+
+        result.Id.Should().Be(created.Id);
+        result.MovieTitle.Should().Be("Inception");
+    }
+
+    [Fact]
+    public async Task GetBookingById_ThrowsNotFound_WhenMissing()
+    {
+        var (bookingSvc, _, _) = BuildFullService(nameof(GetBookingById_ThrowsNotFound_WhenMissing));
+
+        await bookingSvc.Invoking(s => s.GetBookingByIdAsync(9999, 1))
+            .Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task GetBookingById_ThrowsUnauthorized_WhenWrongUser()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(GetBookingById_ThrowsUnauthorized_WhenWrongUser));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+        var created = await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1] });
+
+        await bookingSvc.Invoking(s => s.GetBookingByIdAsync(created.Id, 2))
+            .Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*not authorized to view*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_SetsStatusCancelled_RestoresSeats()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(CancelBooking_SetsStatusCancelled_RestoresSeats));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+        var created = await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1, 2] });
+
+        var result = await bookingSvc.CancelBookingAsync(created.Id, 1);
+
+        result.Success.Should().BeTrue();
+        db.ChangeTracker.Clear();
+        db.Bookings.Find(created.Id)!.Status.Should().Be("Cancelled");
+        db.Showtimes.Find(showtime.Id)!.AvailableSeats.Should().Be(showtime.TotalSeats);
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsConflict_WhenAlreadyCancelled()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(CancelBooking_ThrowsConflict_WhenAlreadyCancelled));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+        var created = await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1] });
+        await bookingSvc.CancelBookingAsync(created.Id, 1);
+
+        await bookingSvc.Invoking(s => s.CancelBookingAsync(created.Id, 1))
+            .Should().ThrowAsync<ConflictException>()
+            .WithMessage("*already cancelled*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsConflict_WhenWithin2HoursOfShow()
+    {
+        var db = new MovieDbContext(BuildOptions(nameof(CancelBooking_ThrowsConflict_WhenWithin2HoursOfShow)));
+        var movie = new Movie { Title = "Upcoming", Genre = "Action", Duration = 120, PosterUrl = "https://example.com/p.jpg" };
+        db.Movies.Add(movie);
+        var nearShowtime = new Showtime
+        {
+            Movie = movie,
+            ShowDate = DateOnly.FromDateTime(DateTime.Now),
+            ShowTime = TimeOnly.FromDateTime(DateTime.Now.AddMinutes(90)),
+            ScreenNumber = "S1",
+            TotalSeats = 50,
+            AvailableSeats = 50
+        };
+        db.Showtimes.Add(nearShowtime);
+        await db.SaveChangesAsync();
+
+        var bookingSvc = new BookingService(new CreateBookingInputValidator(), BuildMapper(), db, new BookingRepository(db), NullLogger<BookingService>.Instance);
+        var booking = new MovieBooking { ShowtimeId = nearShowtime.Id, UserId = 1, SeatNumbers = "1", NumberOfSeats = 1, Status = "Confirmed", BookedAt = DateTime.UtcNow };
+        db.Bookings.Add(booking);
+        await db.SaveChangesAsync();
+
+        await bookingSvc.Invoking(s => s.CancelBookingAsync(booking.Id, 1))
+            .Should().ThrowAsync<ConflictException>()
+            .WithMessage("*2 hours*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsUnauthorized_WhenWrongUser()
+    {
+        var (bookingSvc, showtimeSvc, db) = BuildFullService(nameof(CancelBooking_ThrowsUnauthorized_WhenWrongUser));
+        var (_, showtime) = await SeedAsync(db, showtimeSvc);
+        var created = await bookingSvc.CreateBookingAsync(new CreateBookingInput { ShowtimeId = showtime.Id, UserId = 1, SeatNumbers = [1] });
+
+        await bookingSvc.Invoking(s => s.CancelBookingAsync(created.Id, 2))
+            .Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*not authorized to cancel*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsNotFound_WhenMissing()
+    {
+        var (bookingSvc, _, _) = BuildFullService(nameof(CancelBooking_ThrowsNotFound_WhenMissing));
+
+        await bookingSvc.Invoking(s => s.CancelBookingAsync(9999, 1))
+            .Should().ThrowAsync<NotFoundException>();
     }
 }

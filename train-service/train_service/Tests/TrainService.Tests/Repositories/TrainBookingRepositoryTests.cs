@@ -42,6 +42,8 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
 
     public Task DisposeAsync() => _db.DisposeAsync().AsTask();
 
+    private static DateTime Unspecified(DateTime dt) => DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+
     private TrainBooking MakeBooking(string status = "Confirmed", int? waitlistPosition = null) => new()
     {
         TrainId = _train.Id,
@@ -53,7 +55,7 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
         PNR = "PNR" + Guid.NewGuid().ToString("N").ToUpper()[..8],
         Status = status,
         WaitlistPosition = waitlistPosition,
-        BookedAt = DateTime.UtcNow
+        BookedAt = Unspecified(DateTime.UtcNow)
     };
 
     [Fact]
@@ -89,5 +91,54 @@ public class TrainBookingRepositoryTests(PostgresFixture fixture) : IAsyncLifeti
         result.Should().HaveCount(2);
         result[0].WaitlistPosition.Should().Be(1);
         result[1].WaitlistPosition.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetByUserIdAsync_ReturnsUserBookingsOrderedDesc()
+    {
+        var b1 = MakeBooking(); b1.UserId = 10; b1.BookedAt = Unspecified(DateTime.UtcNow.AddMinutes(-5));
+        var b2 = MakeBooking(); b2.UserId = 10; b2.BookedAt = Unspecified(DateTime.UtcNow);
+        var b3 = MakeBooking(); b3.UserId = 99;
+        await _bookingRepo.AddAsync(b1);
+        await _bookingRepo.AddAsync(b2);
+        await _bookingRepo.AddAsync(b3);
+
+        var result = await _bookingRepo.GetByUserIdAsync(10);
+
+        result.Should().HaveCount(2);
+        result[0].BookedAt.Should().BeAfter(result[1].BookedAt);
+    }
+
+    [Fact]
+    public async Task GetByUserIdAsync_LoadsTrainNavigation()
+    {
+        var booking = MakeBooking(); booking.UserId = 20;
+        await _bookingRepo.AddAsync(booking);
+
+        var result = await _bookingRepo.GetByUserIdAsync(20);
+
+        result.Should().HaveCount(1);
+        result[0].Train.Should().NotBeNull();
+        result[0].Train.TrainName.Should().Be("Booking Test Express");
+    }
+
+    [Fact]
+    public async Task GetByIdWithDetailsAsync_ReturnsNullWhenNotFound()
+    {
+        var result = await _bookingRepo.GetByIdWithDetailsAsync(99999);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdWithDetailsAsync_LoadsTrainNavigation()
+    {
+        var booking = await _bookingRepo.AddAsync(MakeBooking());
+
+        var result = await _bookingRepo.GetByIdWithDetailsAsync(booking.Id);
+
+        result.Should().NotBeNull();
+        result!.Train.Should().NotBeNull();
+        result.Train.TrainName.Should().Be("Booking Test Express");
     }
 }

@@ -12,4 +12,18 @@ public class BookingRepository(MovieDbContext context)
             .Where(b => b.ShowtimeId == showtimeId &&
                         (b.Status == "Pending" || b.Status == "Confirmed"))
             .ToListAsync();
+
+    public async Task<List<MovieBooking>> GetByUserIdAsync(int userId)
+        => await context.Bookings
+            .Include(b => b.Showtime)
+                .ThenInclude(s => s.Movie)
+            .Where(b => b.UserId == userId)
+            .OrderByDescending(b => b.BookedAt)
+            .ToListAsync();
+
+    public async Task<MovieBooking?> GetByIdWithDetailsAsync(int bookingId)
+        => await context.Bookings
+            .Include(b => b.Showtime)
+                .ThenInclude(s => s.Movie)
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
 }

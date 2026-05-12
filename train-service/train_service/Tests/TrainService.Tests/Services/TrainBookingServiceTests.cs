@@ -249,4 +249,129 @@ public class TrainBookingServiceTests
             .Should().NotThrowAsync();
         db.Bookings.Count().Should().Be(0);
     }
+
+    [Fact]
+    public async Task GetMyBookings_ReturnsAllForUser()
+    {
+        var (svc, _, train) = BuildFullService(nameof(GetMyBookings_ReturnsAllForUser), availableSeats: 10);
+        var input1 = ValidInput(train.Id); input1.UserId = 1;
+        var input2 = ValidInput(train.Id); input2.UserId = 1;
+        var input3 = ValidInput(train.Id); input3.UserId = 2;
+        await svc.CreateBookingAsync(input1);
+        await svc.CreateBookingAsync(input2);
+        await svc.CreateBookingAsync(input3);
+
+        var results = await svc.GetMyBookingsAsync(1);
+
+        results.Should().HaveCount(2);
+        results.Should().OnlyContain(b => b.UserId == 1);
+    }
+
+    [Fact]
+    public async Task GetMyBookings_ReturnsEmpty_WhenNone()
+    {
+        var (svc, _, _) = BuildFullService(nameof(GetMyBookings_ReturnsEmpty_WhenNone));
+
+        var results = await svc.GetMyBookingsAsync(999);
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetBookingById_ReturnsEnrichedResponse_WithTrainName()
+    {
+        var (svc, _, train) = BuildFullService(nameof(GetBookingById_ReturnsEnrichedResponse_WithTrainName));
+        var created = await svc.CreateBookingAsync(ValidInput(train.Id));
+
+        var result = await svc.GetBookingByIdAsync(created.Id, created.UserId);
+
+        result.Id.Should().Be(created.Id);
+        result.TrainName.Should().Be("Test Express");
+    }
+
+    [Fact]
+    public async Task GetBookingById_ThrowsNotFound_WhenMissing()
+    {
+        var (svc, _, _) = BuildFullService(nameof(GetBookingById_ThrowsNotFound_WhenMissing));
+
+        await svc.Invoking(s => s.GetBookingByIdAsync(9999, 1))
+            .Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task GetBookingById_ThrowsUnauthorized_WhenWrongUser()
+    {
+        var (svc, _, train) = BuildFullService(nameof(GetBookingById_ThrowsUnauthorized_WhenWrongUser));
+        var created = await svc.CreateBookingAsync(ValidInput(train.Id));
+
+        await svc.Invoking(s => s.GetBookingByIdAsync(created.Id, 999))
+            .Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*not authorized to view*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsUnauthorized_WhenWrongUser()
+    {
+        var (svc, _, train) = BuildFullService(nameof(CancelBooking_ThrowsUnauthorized_WhenWrongUser));
+        var created = await svc.CreateBookingAsync(ValidInput(train.Id));
+
+        await svc.Invoking(s => s.CancelBookingAsync(created.Id, 999))
+            .Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*not authorized to cancel*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsConflict_WhenWithin2HoursOfDeparture()
+    {
+        var options = new DbContextOptionsBuilder<TrainDbContext>()
+            .UseInMemoryDatabase(nameof(CancelBooking_ThrowsConflict_WhenWithin2HoursOfDeparture))
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        var db = new TrainDbContext(options);
+        var seatRepo = new SeatAvailabilityRepository(db);
+        var bookingRepo = new TrainBookingRepository(db);
+
+        var imminent = new Train
+        {
+            TrainName = "Imminent Express",
+            TrainNumber = "IMM001",
+            Source = "A",
+            Destination = "B",
+            DepartureTime = DateTime.UtcNow.AddMinutes(90),
+            ArrivalTime = DateTime.UtcNow.AddHours(5),
+            Price = 100m
+        };
+        db.Trains.Add(imminent);
+        db.SaveChanges();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        db.SeatAvailabilities.Add(new SeatAvailability { TrainId = imminent.Id, Date = today, AvailableSeats = 10 });
+        db.SaveChanges();
+
+        var svc = new TrainBookingService(
+            bookingRepo, seatRepo,
+            new CreateTrainBookingInputValidator(),
+            BuildMapper(), db,
+            NullLogger<TrainBookingService>.Instance);
+
+        var input = ValidInput(imminent.Id);
+        input.UserId = 1;
+        var created = await svc.CreateBookingAsync(input);
+
+        await svc.Invoking(s => s.CancelBookingAsync(created.Id, 1))
+            .Should().ThrowAsync<ConflictException>()
+            .WithMessage("*2 hours*");
+    }
+
+    [Fact]
+    public async Task CancelBooking_ThrowsConflict_WhenAlreadyCancelled()
+    {
+        var (svc, _, train) = BuildFullService(nameof(CancelBooking_ThrowsConflict_WhenAlreadyCancelled));
+        var created = await svc.CreateBookingAsync(ValidInput(train.Id));
+        await svc.CancelBookingAsync(created.Id, created.UserId);
+
+        await svc.Invoking(s => s.CancelBookingAsync(created.Id, created.UserId))
+            .Should().ThrowAsync<ConflictException>()
+            .WithMessage("*already cancelled*");
+    }
 }

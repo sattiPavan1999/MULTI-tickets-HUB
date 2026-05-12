@@ -45,6 +45,8 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
 
     public Task DisposeAsync() => _db.DisposeAsync().AsTask();
 
+    private static DateTime Unspecified(DateTime dt) => DateTime.SpecifyKind(dt, DateTimeKind.Unspecified);
+
     private MovieBooking MakeBooking(string seats = "1,2", string status = "Pending") => new()
     {
         ShowtimeId = _showtime.Id,
@@ -52,7 +54,7 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
         SeatNumbers = seats,
         NumberOfSeats = seats.Split(',').Length,
         Status = status,
-        BookedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+        BookedAt = Unspecified(DateTime.UtcNow)
     };
 
     [Fact]
@@ -86,5 +88,55 @@ public class BookingRepositoryTests(PostgresFixture fixture) : IAsyncLifetime
 
         result.Should().HaveCount(1);
         result[0].SeatNumbers.Should().Be("1,2");
+    }
+
+    [Fact]
+    public async Task GetByUserIdAsync_ReturnsUserBookingsOrderedDesc()
+    {
+        var b1 = MakeBooking("1", "Confirmed"); b1.UserId = 10; b1.BookedAt = Unspecified(DateTime.UtcNow.AddMinutes(-5));
+        var b2 = MakeBooking("2", "Confirmed"); b2.UserId = 10; b2.BookedAt = Unspecified(DateTime.UtcNow);
+        var b3 = MakeBooking("3", "Confirmed"); b3.UserId = 99;
+        await _repo.AddAsync(b1);
+        await _repo.AddAsync(b2);
+        await _repo.AddAsync(b3);
+
+        var result = await _repo.GetByUserIdAsync(10);
+
+        result.Should().HaveCount(2);
+        result[0].BookedAt.Should().BeAfter(result[1].BookedAt);
+    }
+
+    [Fact]
+    public async Task GetByUserIdAsync_LoadsShowtimeAndMovieNavigation()
+    {
+        var booking = MakeBooking("5", "Confirmed");
+        booking.UserId = 20;
+        await _repo.AddAsync(booking);
+
+        var result = await _repo.GetByUserIdAsync(20);
+
+        result.Should().HaveCount(1);
+        result[0].Showtime.Should().NotBeNull();
+        result[0].Showtime.Movie.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdWithDetailsAsync_ReturnsNullWhenNotFound()
+    {
+        var result = await _repo.GetByIdWithDetailsAsync(99999);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdWithDetailsAsync_LoadsShowtimeNavigation()
+    {
+        var booking = await _repo.AddAsync(MakeBooking("7", "Confirmed"));
+
+        var result = await _repo.GetByIdWithDetailsAsync(booking.Id);
+
+        result.Should().NotBeNull();
+        result!.Showtime.Should().NotBeNull();
+        result.Showtime.Movie.Should().NotBeNull();
     }
 }

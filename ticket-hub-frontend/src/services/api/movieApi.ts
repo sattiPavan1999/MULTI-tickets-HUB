@@ -41,6 +41,15 @@ export interface BookingResponse {
   numberOfSeats: number;
   status: string;
   bookedAt: string;
+  movieTitle: string | null;
+  showDate: string | null;
+  showTime: string | null;
+  screenNumber: string | null;
+}
+
+export interface OperationResult {
+  success: boolean;
+  message: string;
 }
 
 export const movieApi = {
@@ -55,4 +64,13 @@ export const movieApi = {
 
   createBooking: (data: CreateBookingInput): Promise<BookingResponse> =>
     apiClient.post<BookingResponse>('/api/movies/bookings', data).then((r) => r.data),
+
+  getMyBookings: (): Promise<BookingResponse[]> =>
+    apiClient.get<BookingResponse[]>('/api/movies/bookings/my').then((r) => r.data),
+
+  getBooking: (id: number): Promise<BookingResponse> =>
+    apiClient.get<BookingResponse>(`/api/movies/bookings/${id}`).then((r) => r.data),
+
+  cancelBooking: (id: number): Promise<OperationResult> =>
+    apiClient.delete<OperationResult>(`/api/movies/bookings/${id}`).then((r) => r.data),
 };

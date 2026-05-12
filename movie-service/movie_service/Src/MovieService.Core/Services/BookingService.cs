@@ -7,6 +7,7 @@ using MovieService.Core.Data;
 using MovieService.Core.DTOs;
 using MovieService.Core.Exceptions;
 using MovieService.Core.Models;
+using MovieService.Core.Repositories;
 
 namespace MovieService.Core.Services;
 
@@ -14,6 +15,7 @@ public class BookingService(
     IValidator<CreateBookingInput> validator,
     IMapper mapper,
     MovieDbContext dbContext,
+    IBookingRepository bookingRepository,
     ILogger<BookingService> logger) : IBookingService
 {
     private static readonly TimeZoneInfo Ist = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
@@ -72,6 +74,58 @@ public class BookingService(
         {
             await tx.RollbackAsync();
             throw new ConflictException("Seats filled — another booking completed first. Please try again.");
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<List<BookingResponse>> GetMyBookingsAsync(int userId)
+    {
+        var bookings = await bookingRepository.GetByUserIdAsync(userId);
+        return mapper.Map<List<BookingResponse>>(bookings);
+    }
+
+    public async Task<BookingResponse> GetBookingByIdAsync(int bookingId, int userId)
+    {
+        var booking = await bookingRepository.GetByIdWithDetailsAsync(bookingId)
+            ?? throw new NotFoundException($"Booking {bookingId} not found");
+
+        if (booking.UserId != userId)
+            throw new UnauthorizedAccessException("You are not authorized to view this booking");
+
+        return mapper.Map<BookingResponse>(booking);
+    }
+
+    public async Task<OperationResult> CancelBookingAsync(int bookingId, int userId)
+    {
+        await using var tx = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        try
+        {
+            var booking = await bookingRepository.GetByIdWithDetailsAsync(bookingId)
+                ?? throw new NotFoundException($"Booking {bookingId} not found");
+
+            if (booking.UserId != userId)
+                throw new UnauthorizedAccessException("You are not authorized to cancel this booking");
+
+            if (booking.Status == BookingStatus.Cancelled)
+                throw new ConflictException("Booking is already cancelled");
+
+            var istNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ist);
+            if (istNow >= booking.Showtime.ShowDate.ToDateTime(booking.Showtime.ShowTime).AddHours(-2))
+                throw new ConflictException("Cancellation is not allowed within 2 hours of the show");
+
+            booking.Status = BookingStatus.Cancelled;
+            booking.Showtime.AvailableSeats += booking.NumberOfSeats;
+            dbContext.Bookings.Update(booking);
+            dbContext.Showtimes.Update(booking.Showtime);
+            await dbContext.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            logger.LogInformation("Booking {BookingId} cancelled by user {UserId}", bookingId, userId);
+            return new OperationResult { Success = true, Message = "Booking cancelled successfully" };
         }
         catch
         {

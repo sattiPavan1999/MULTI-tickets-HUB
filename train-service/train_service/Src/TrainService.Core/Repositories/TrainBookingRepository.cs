@@ -14,4 +14,16 @@ public class TrainBookingRepository(TrainDbContext context) : BaseRepository<Tra
             .Where(b => b.TrainId == trainId && b.TravelDate == date && b.Status == "Waitlisted")
             .OrderBy(b => b.WaitlistPosition)
             .ToListAsync();
+
+    public async Task<List<TrainBooking>> GetByUserIdAsync(int userId)
+        => await context.Bookings
+            .Include(b => b.Train)
+            .Where(b => b.UserId == userId)
+            .OrderByDescending(b => b.BookedAt)
+            .ToListAsync();
+
+    public async Task<TrainBooking?> GetByIdWithDetailsAsync(int bookingId)
+        => await context.Bookings
+            .Include(b => b.Train)
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
 }

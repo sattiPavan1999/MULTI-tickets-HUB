@@ -71,4 +71,85 @@ public class BookingControllerTests
 
         svc.Verify(s => s.CreateBookingAsync(It.Is<CreateBookingInput>(i => i.UserId == 42)), Times.Once);
     }
+
+    [Fact]
+    public async Task GetMyBookings_ValidHeader_Returns200()
+    {
+        var svc = new Mock<IBookingService>();
+        svc.Setup(s => s.GetMyBookingsAsync(It.IsAny<int>()))
+           .ReturnsAsync([MakeResponse()]);
+        var controller = BuildController(svc.Object, userId: 42);
+
+        var result = await controller.GetMyBookings();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        ok.StatusCode.Should().Be(200);
+        svc.Verify(s => s.GetMyBookingsAsync(42), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetMyBookings_MissingHeader_Returns401()
+    {
+        var svc = new Mock<IBookingService>();
+        var controller = new BookingController(svc.Object);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        var result = await controller.GetMyBookings();
+
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task GetById_ValidHeader_Returns200()
+    {
+        var svc = new Mock<IBookingService>();
+        svc.Setup(s => s.GetBookingByIdAsync(It.IsAny<int>(), It.IsAny<int>()))
+           .ReturnsAsync(MakeResponse());
+        var controller = BuildController(svc.Object, userId: 42);
+
+        var result = await controller.GetById(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        ok.StatusCode.Should().Be(200);
+        svc.Verify(s => s.GetBookingByIdAsync(1, 42), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetById_MissingHeader_Returns401()
+    {
+        var svc = new Mock<IBookingService>();
+        var controller = new BookingController(svc.Object);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        var result = await controller.GetById(1);
+
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Cancel_ValidHeader_CallsServiceWithBothArgs()
+    {
+        var svc = new Mock<IBookingService>();
+        svc.Setup(s => s.CancelBookingAsync(It.IsAny<int>(), It.IsAny<int>()))
+           .ReturnsAsync(new OperationResult { Success = true, Message = "Booking cancelled successfully" });
+        var controller = BuildController(svc.Object, userId: 42);
+
+        var result = await controller.Cancel(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        ok.StatusCode.Should().Be(200);
+        svc.Verify(s => s.CancelBookingAsync(1, 42), Times.Once);
+    }
+
+    [Fact]
+    public async Task Cancel_MissingHeader_Returns401()
+    {
+        var svc = new Mock<IBookingService>();
+        var controller = new BookingController(svc.Object);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        var result = await controller.Cancel(1);
+
+        Assert.IsType<UnauthorizedResult>(result.Result);
+    }
 }

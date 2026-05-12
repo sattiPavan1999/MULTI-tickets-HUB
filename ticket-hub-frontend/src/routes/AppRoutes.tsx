@@ -6,6 +6,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { MoviesPage } from '@/pages/MoviesPage';
 import { TrainsPage } from '@/pages/TrainsPage';
+import { MyBookingsPage } from '@/pages/MyBookingsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { AdminMoviesPage } from '@/pages/AdminMoviesPage';
@@ -44,6 +45,7 @@ export function AppRoutes() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/movies" element={<MoviesPage />} />
           <Route path="/trains" element={<TrainsPage />} />
+          <Route path="/my-bookings" element={<MyBookingsPage />} />
         </Route>
       </Route>
 

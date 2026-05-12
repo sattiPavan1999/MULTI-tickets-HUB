@@ -40,6 +40,17 @@ export interface TrainBookingResponse {
   status: string;
   waitlistPosition: number | null;
   bookedAt: string;
+  trainName: string | null;
+  trainNumber: string | null;
+  source: string | null;
+  destination: string | null;
+  departureTime: string | null;
+  arrivalTime: string | null;
+}
+
+export interface OperationResult {
+  success: boolean;
+  message: string;
 }
 
 export const trainApi = {
@@ -57,4 +68,13 @@ export const trainApi = {
 
   createBooking: (data: CreateTrainBookingInput): Promise<TrainBookingResponse> =>
     apiClient.post<TrainBookingResponse>('/api/trains/bookings', data).then((r) => r.data),
+
+  getMyBookings: (): Promise<TrainBookingResponse[]> =>
+    apiClient.get<TrainBookingResponse[]>('/api/trains/bookings/my').then((r) => r.data),
+
+  getBooking: (id: number): Promise<TrainBookingResponse> =>
+    apiClient.get<TrainBookingResponse>(`/api/trains/bookings/${id}`).then((r) => r.data),
+
+  cancelBooking: (id: number): Promise<OperationResult> =>
+    apiClient.delete<OperationResult>(`/api/trains/bookings/${id}`).then((r) => r.data),
 };
