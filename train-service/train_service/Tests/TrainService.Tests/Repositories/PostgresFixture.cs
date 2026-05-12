@@ -13,9 +13,8 @@ public class PostgresFixture : IAsyncLifetime
         Environment.GetEnvironmentVariable("DOCKER_HOST")
         ?? "unix:///var/run/docker.sock";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDockerEndpoint(DockerEndpoint)
-        .WithImage("postgres:17-alpine")
         .Build();
 
     public string ConnectionString { get; private set; } = string.Empty;

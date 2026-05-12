@@ -1,11 +1,10 @@
 using System.Net.Http.Json;
 using AdminBFF.Core.DTOs;
 using AdminBFF.Core.Exceptions;
-using Microsoft.Extensions.Logging;
 
 namespace AdminBFF.Core.Services;
 
-public class TrainServiceClient(HttpClient httpClient, ILogger<TrainServiceClient> logger) : ITrainService
+public class TrainServiceClient(HttpClient httpClient) : ITrainService
 {
     private static async Task ThrowIfErrorAsync(HttpResponseMessage response)
     {

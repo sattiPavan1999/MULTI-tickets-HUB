@@ -1,11 +1,10 @@
 using System.Net.Http.Json;
 using AdminBFF.Core.DTOs;
 using AdminBFF.Core.Exceptions;
-using Microsoft.Extensions.Logging;
 
 namespace AdminBFF.Core.Services;
 
-public class MovieServiceClient(HttpClient httpClient, ILogger<MovieServiceClient> logger) : IMovieService
+public class MovieServiceClient(HttpClient httpClient) : IMovieService
 {
     private static async Task ThrowIfErrorAsync(HttpResponseMessage response)
     {

@@ -263,7 +263,7 @@ Repository tests share one Postgres container via `[Collection("postgres")]` + `
 - `TestContainerExtensions.WaitForPort` polls TCP before migration — required because Testcontainers v4 marks ready before Postgres accepts connections
 - `xunit.runner.json` sets `"parallelizeTestCollections": false`
 - Uses `DOCKER_HOST` env var (falls back to `/var/run/docker.sock`) — works with both Colima and Docker Desktop. Run `colima start` if Docker isn't responding.
-- `PostgreSqlBuilder()` emits CS0618 deprecation warning in Testcontainers v4.11 — known, harmless
+- `PostgreSqlBuilder` takes an image string in the constructor: `new PostgreSqlBuilder("postgres:17-alpine")` — do not use the parameterless constructor (deprecated in v4.11) or `.WithImage()` chain
 
 See `REPOSITORY_TESTS_SETUP.md` at the repo root for detailed Testcontainers troubleshooting.
 
